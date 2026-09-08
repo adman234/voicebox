@@ -1,11 +1,22 @@
 services:
-  aem-web:
-    image: ghcr.io/funway/audible-epub3-maker
+  voicebox:
+    image: ghcr.io/adman234/voicebox:latest
+    container_name: voicebox
     ports:
       - "7860:7860"
     volumes:
-      - ./output:/app/output
+      # Drop .epub files in here and Voicebox converts them automatically.
+      - ./ingest:/ingest
+      # Finished audiobooks.
+      - ./output:/output
+      # Automation defaults (settings.json) and the Kokoro model cache.
+      - ./config:/config
     environment:
+      # File ownership for the generated files. 99:100 is Unraid's nobody:users.
+      - PUID=99
+      - PGID=100
+      - UMASK=022
+      # Only needed if you use the Azure TTS engine; Kokoro runs offline.
       - AZURE_TTS_KEY=your_azure_speech_key
       - AZURE_TTS_REGION=your_speech_region
     restart: unless-stopped

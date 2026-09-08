@@ -17,4 +17,4 @@ kokoro>=0.9.4
 soundfile
 
 # Web GUI
-gradio
+gradio>=5.0,<7.0
