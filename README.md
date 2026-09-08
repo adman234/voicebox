@@ -64,7 +64,8 @@ Images are published to the GitHub Container Registry on every push to `main`:
 - `ghcr.io/adman234/voicebox:latest`
 - `ghcr.io/adman234/voicebox:v1.2.3` for tagged releases
 
-The image includes all dependencies and runs the Web GUI by default (amd64 only).
+The image includes all dependencies and runs the Web GUI by default (linux/amd64 only). It is roughly
+3.5 GB compressed — most of that is the NVIDIA CUDA libraries that `torch` pulls in for Kokoro.
 
 #### Volumes
 
@@ -132,9 +133,9 @@ An Unraid template is included at [`unraid/voicebox.xml`](unraid/voicebox.xml).
    where the audiobooks should land, and **Config** at `/mnt/user/appdata/voicebox`.
 3. Start the container and open the WebUI on port 7860.
 
-**GHCR packages are private by default.** After the first successful build, open
-`https://github.com/users/adman234/packages/container/voicebox/settings` and set the package visibility
-to public — otherwise Unraid cannot pull the image without registry credentials.
+The published package is **public**, so Unraid pulls it without any registry credentials. If you ever
+switch it to private (package page → Package settings → Change visibility), you will need to run
+`docker login ghcr.io` on the server before the pull will work.
 
 ### 💡 Notes
 
