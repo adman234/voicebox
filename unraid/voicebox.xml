@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Voicebox</Name>
+  <Repository>ghcr.io/adman234/voicebox:latest</Repository>
+  <Registry>https://github.com/adman234/voicebox/pkgs/container/voicebox</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/adman234/voicebox/issues</Support>
+  <Project>https://github.com/adman234/voicebox</Project>
+  <Overview>
+    Voicebox turns plain EPUB books into audiobooks in EPUB 3 Media Overlays format using Azure or Kokoro text-to-speech.
+
+    Use the web UI to convert a single book, or drop .epub files into the ingest folder and Voicebox converts them automatically, one at a time. Defaults for automatic conversions are set in the Settings tab and stored in the config folder.
+
+    Successfully converted source files are moved to ingest/processed; failures are moved to ingest/failed.
+  </Overview>
+  <Category>MediaApp:Books Productivity:</Category>
+  <WebUI>http://[IP]:[PORT:7860]/</WebUI>
+  <TemplateURL/>
+  <Icon/>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="7860" Default="7860" Mode="tcp"
+          Description="Port for the Voicebox web interface."
+          Type="Port" Display="always" Required="true" Mask="false">7860</Config>
+  <Config Name="Ingest Folder" Target="/ingest" Default="/mnt/user/books/ingest" Mode="rw"
+          Description="Drop .epub files here to have them converted automatically. Voicebox creates processed/ and failed/ subfolders inside it."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/books/ingest</Config>
+  <Config Name="Output Folder" Target="/output" Default="/mnt/user/books/audiobooks" Mode="rw"
+          Description="Where the generated audiobooks are written."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/books/audiobooks</Config>
+  <Config Name="Config Folder" Target="/config" Default="/mnt/user/appdata/voicebox" Mode="rw"
+          Description="Stores settings.json (the automation defaults) and the downloaded Kokoro model. Keep this on appdata so settings and the model survive container updates."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/voicebox</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode=""
+          Description="User ID that owns the generated files. 99 is Unraid's nobody."
+          Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode=""
+          Description="Group ID that owns the generated files. 100 is Unraid's users group."
+          Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="UMASK" Target="UMASK" Default="022" Mode=""
+          Description="File mode mask applied to generated files."
+          Type="Variable" Display="advanced" Required="false" Mask="false">022</Config>
+  <Config Name="AZURE_TTS_KEY" Target="AZURE_TTS_KEY" Default="" Mode=""
+          Description="Azure Speech key. Only needed for the Azure TTS engine - the Kokoro engine runs offline with no credentials."
+          Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="AZURE_TTS_REGION" Target="AZURE_TTS_REGION" Default="" Mode=""
+          Description="Azure Speech region, e.g. eastus. Only needed for the Azure TTS engine."
+          Type="Variable" Display="always" Required="false" Mask="false"/>
+</Container>

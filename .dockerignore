@@ -35,3 +35,6 @@ dev_output/
 docker-compose.yml
 
 .DS_Store
+
+ingest/
+config/

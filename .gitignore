@@ -18,3 +18,5 @@ docker-compose.yml
 .DS_Store
 report.html
 manual_test.py
+ingest/
+config/
