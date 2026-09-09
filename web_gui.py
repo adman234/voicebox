@@ -27,7 +27,7 @@ from audible_epub3_maker.automation.runner import (
 )
 from audible_epub3_maker.automation.ingest import ingest_queue
 from audible_epub3_maker.automation.settings_store import (
-    settings_store, DEFAULTS, LOG_LEVELS, NEWLINE_MODES,
+    settings_store, DEFAULTS, LOG_LEVELS, NEWLINE_MODES, M4B_BITRATES,
 )
 from audible_epub3_maker import audiobook
 
@@ -214,7 +214,7 @@ def on_lang_change(tts_engine, tts_lang):
 
 
 def run_generation(input_file, output_dir, output_filename, title_suffix, log_level, cleanup,
-                   output_formats, tts_engine, tts_lang, tts_voice, tts_speed,
+                   output_formats, m4b_bitrate, tts_engine, tts_lang, tts_voice, tts_speed,
                    tts_chunk_len, newline_mode, align_threshold, max_workers):
     args = runner_mod.build_command(
         input_file=input_file,
@@ -232,6 +232,7 @@ def run_generation(input_file, output_dir, output_filename, title_suffix, log_le
         align_threshold=align_threshold,
         max_workers=max_workers,
         output_formats=output_formats,
+        m4b_bitrate=m4b_bitrate,
     )
     runner.start(args, runner_mod.MANUAL, Path(str(input_file)).name)
 
@@ -250,7 +251,7 @@ def check_process():
 
  
 def on_run_click(input_file, output_dir, output_filename, title_suffix, log_level, cleanup,
-                 output_formats, tts_engine, tts_lang, tts_voice, tts_speed,
+                 output_formats, m4b_bitrate, tts_engine, tts_lang, tts_voice, tts_speed,
                  tts_chunk_len, newline_mode, align_threshold, max_workers):
     # 检查 input_file, output_dir, tts_engine 必须不为空
     if not input_file:
@@ -275,6 +276,7 @@ def on_run_click(input_file, output_dir, output_filename, title_suffix, log_leve
             log_level=log_level,
             cleanup=cleanup,
             output_formats=output_formats,
+            m4b_bitrate=m4b_bitrate,
             tts_engine=tts_engine,
             tts_lang=tts_lang,
             tts_voice=tts_voice,
@@ -425,7 +427,7 @@ def on_clear_history():
 
 SETTINGS_KEYS = [
     "automation_enabled", "scan_interval", "stable_checks",
-    "output_dir", "output_filename", "title_suffix", "log_level", "cleanup", "output_formats",
+    "output_dir", "output_filename", "title_suffix", "log_level", "cleanup", "output_formats", "m4b_bitrate",
     "tts_engine", "tts_lang", "tts_voice", "tts_speed",
     "tts_chunk_len", "newline_mode", "align_threshold", "max_workers",
 ]
@@ -490,6 +492,7 @@ def seed_convert_tab():
         config["log_level"],
         config["cleanup"],
         config["output_formats"],
+        config["m4b_bitrate"],
         config["tts_engine"].capitalize(),
         lang_update,
         voice_update,
@@ -544,12 +547,20 @@ def build_convert_tab():
                                               info="Cleanup",
                                               )
                 with gr.Row(equal_height=True):
-                    output_formats = gr.CheckboxGroup(choices=FORMAT_CHOICES,
-                                                      value=DEFAULTS["output_formats"],
-                                                      label="Output Formats",
-                                                      info=FORMAT_INFO,
-                                                      interactive=True,
-                                                      )
+                    with gr.Column(min_width=160):
+                        output_formats = gr.CheckboxGroup(choices=FORMAT_CHOICES,
+                                                          value=DEFAULTS["output_formats"],
+                                                          label="Output Formats",
+                                                          info=FORMAT_INFO,
+                                                          interactive=True,
+                                                          )
+                    with gr.Column(min_width=160):
+                        m4b_bitrate = gr.Dropdown(M4B_BITRATES,
+                                                  value=DEFAULTS["m4b_bitrate"],
+                                                  label="M4B Bitrate",
+                                                  info="Quality of the M4B. Higher is better and larger; speech is fine at 64k.",
+                                                  interactive=True,
+                                                  )
             
             # TTS settings
             with gr.Accordion("🎙 TTS Settings", open=True, elem_id="tts_sets"):
@@ -639,6 +650,7 @@ def build_convert_tab():
         "log_level": log_level,
         "cleanup": cleanup,
         "output_formats": output_formats,
+        "m4b_bitrate": m4b_bitrate,
         "tts_engine": tts_engine,
         "tts_lang": tts_lang,
         "tts_voice": tts_voice,
@@ -741,11 +753,18 @@ def build_settings_tab():
                                   label="Check to delete temporary files after processing",
                                   info="Cleanup")
         with gr.Row(equal_height=True):
-            output_formats = gr.CheckboxGroup(choices=FORMAT_CHOICES,
-                                              value=DEFAULTS["output_formats"],
-                                              label="Output Formats",
-                                              info=FORMAT_INFO,
-                                              interactive=True)
+            with gr.Column(min_width=160):
+                output_formats = gr.CheckboxGroup(choices=FORMAT_CHOICES,
+                                                  value=DEFAULTS["output_formats"],
+                                                  label="Output Formats",
+                                                  info=FORMAT_INFO,
+                                                  interactive=True)
+            with gr.Column(min_width=160):
+                m4b_bitrate = gr.Dropdown(M4B_BITRATES,
+                                          value=DEFAULTS["m4b_bitrate"],
+                                          label="M4B Bitrate",
+                                          info="Quality of the M4B. Higher is better and larger; speech is fine at 64k.",
+                                          interactive=True)
 
     with gr.Accordion("🎙 TTS Settings", open=True):
         with gr.Row(equal_height=True):
@@ -803,6 +822,7 @@ def build_settings_tab():
         "log_level": log_level,
         "cleanup": cleanup,
         "output_formats": output_formats,
+        "m4b_bitrate": m4b_bitrate,
         "tts_engine": tts_engine,
         "tts_lang": tts_lang,
         "tts_voice": tts_voice,
@@ -846,7 +866,7 @@ def launch_gui(host: str = "127.0.0.1", port: int = 7860):
         run_inputs = [
             convert["input_file"], convert["output_dir"], convert["output_filename"],
             convert["title_suffix"], convert["log_level"], convert["cleanup"],
-            convert["output_formats"], convert["tts_engine"], convert["tts_lang"], convert["tts_voice"], convert["tts_speed"],
+            convert["output_formats"], convert["m4b_bitrate"], convert["tts_engine"], convert["tts_lang"], convert["tts_voice"], convert["tts_speed"],
             convert["tts_chunk_len"], convert["newline_mode"], convert["align_threshold"],
             convert["max_workers"],
         ]

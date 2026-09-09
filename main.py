@@ -150,6 +150,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--m4b_bitrate",
+        default="64k",
+        help="AAC bitrate for m4b output (default: 64k). Higher is better quality and larger.",
+    )
+
+    parser.add_argument(
         "--cleanup",
         action="store_true",
         default=False,

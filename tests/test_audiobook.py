@@ -148,3 +148,82 @@ def test_app_exports_only_the_requested_formats(tmp_path, monkeypatch):
     assert (dest / "Test Book.m4b").is_file()
     # mp3 was not requested, so no chapter files should appear.
     assert not list(dest.glob("*.mp3"))
+
+
+## --------------------------------------------- skipping needless alignment
+
+class _StubTTS:
+    """Returns audio but no word boundaries, like an engine that cannot align."""
+
+    def __init__(self, seconds=1):
+        self.seconds = seconds
+
+    def html_to_speech(self, html_text, output_file, metadata=None):
+        make_mp3(Path(output_file), self.seconds)
+        return []
+
+
+@needs_ffmpeg
+def test_alignment_is_skipped_when_no_epub_is_wanted(tmp_path, monkeypatch):
+    """Segmentation and alignment only feed the EPUB's SMIL. For audio-only
+    output they are wasted work, and word boundaries are not even needed."""
+    from audible_epub3_maker import worker
+    from audible_epub3_maker.config import settings
+    from audible_epub3_maker.utils.types import TaskPayload
+
+    monkeypatch.setattr(worker, "create_tts_engine", lambda name: _StubTTS())
+    monkeypatch.setattr(settings, "output_formats", ["m4b"])
+    monkeypatch.setattr(settings, "tts_engine", "kokoro")
+
+    payload = TaskPayload(idx=0, html_text="<html><body><h1>T</h1><p>Words.</p></body></html>",
+                          audio_output_file=tmp_path / "aud0.mp3", audio_metadata={})
+    result = worker.task_fn(payload)
+
+    assert result.alignments == []
+    assert result.tts_seconds > 0
+    assert result.align_seconds == 0.0
+
+
+@needs_ffmpeg
+def test_missing_word_boundaries_still_fail_when_an_epub_is_wanted(tmp_path, monkeypatch):
+    """The EPUB genuinely needs them, so this must not be silently skipped too."""
+    from audible_epub3_maker import worker
+    from audible_epub3_maker.config import settings
+    from audible_epub3_maker.utils.types import NoWordBoundariesError, TaskPayload
+
+    monkeypatch.setattr(worker, "create_tts_engine", lambda name: _StubTTS())
+    monkeypatch.setattr(settings, "output_formats", ["epub"])
+
+    payload = TaskPayload(idx=0, html_text="<html><body><p>Words.</p></body></html>",
+                          audio_output_file=tmp_path / "aud0.mp3", audio_metadata={})
+    with pytest.raises(NoWordBoundariesError):
+        worker.task_fn(payload)
+
+
+@needs_ffmpeg
+def test_audiobook_uses_the_clean_title_not_the_suffixed_one(tmp_path, monkeypatch):
+    """The suffix marks the generated EPUB; it has no place in a library."""
+    from audible_epub3_maker.app import App
+    from audible_epub3_maker.config import settings
+
+    tmp_dir = tmp_path / "work"
+    tmp_dir.mkdir()
+    make_mp3(tmp_dir / "aud0.mp3", 1)
+
+    book = types.SimpleNamespace(
+        title="The Klan Unmasked _voicebox",   # already suffixed for the EPUB
+        author="Stetson Kennedy", language="en", identifier="x",
+        get_cover_item=lambda: None,
+    )
+    monkeypatch.setattr(settings, "output_dir", tmp_path / "library")
+    monkeypatch.setattr(settings, "tts_engine", "kokoro")
+    monkeypatch.setattr(settings, "tts_voice", "af_heart")
+    monkeypatch.setattr(settings, "m4b_bitrate", "32k")
+
+    App().export_audiobook(book, ["mp3"], ["One"], [0], tmp_dir,
+                           title="The Klan Unmasked")
+
+    dest = tmp_path / "library" / "Stetson Kennedy" / "The Klan Unmasked"
+    assert dest.is_dir()
+    assert not (tmp_path / "library" / "Stetson Kennedy" / "The Klan Unmasked _voicebox").exists()
+    assert json.loads((dest / "metadata.json").read_text())["title"] == "The Klan Unmasked"

@@ -29,6 +29,10 @@ TOTAL_TASKS_RE = re.compile(r"Total tasks:\s*(\d+)")
 TASK_DONE_RE = re.compile(r"\[Task (\d+)\]\s+complete")
 TASK_FAILED_RE = re.compile(r"\[Task (\d+)\]\s+failed\.")
 TASKS_FINISHED_RE = re.compile(r"Processing complete\.")
+# Chapters vary enormously in length - front matter is seconds, a real chapter
+# is minutes - so progress counted in chapters misleads badly. main.py reports
+# each chapter's size, which lets progress be weighted by actual work.
+CHAPTER_SIZES_RE = re.compile(r"Chapter characters:\s*([\d=,]+)")
 EPUB_SAVED_RE = re.compile(r"EPUB saved to")
 
 # Stages a conversion moves through, in order.
@@ -41,7 +45,7 @@ STAGE_SAVED = "saved"
 def build_command(input_file, output_dir, output_filename, title_suffix, log_level, cleanup,
                   tts_engine, tts_lang, tts_voice, tts_speed,
                   tts_chunk_len, newline_mode, align_threshold, max_workers,
-                  output_formats=None) -> list[str]:
+                  output_formats=None, m4b_bitrate="64k") -> list[str]:
     """Build the `main.py` argv for one conversion."""
     # Passed as --option=value throughout: argparse reads a bare value that
     # begins with "-" as another option, which made a title suffix like
@@ -62,6 +66,7 @@ def build_command(input_file, output_dir, output_filename, title_suffix, log_lev
         f"--align_threshold={align_threshold}",
         f"--max_workers={int(max_workers)}",
         "--output_formats=" + ",".join(output_formats or ["epub"]),
+        f"--m4b_bitrate={m4b_bitrate}",
         "--force",
     ]
     if cleanup:
@@ -156,12 +161,22 @@ class ConversionRunner:
 
     @staticmethod
     def _empty_progress() -> dict:
-        return {"total": None, "done": set(), "failed": set(),
+        return {"total": None, "done": set(), "failed": set(), "sizes": {},
                 "started_at": None, "stage": STAGE_PREPARING}
 
     def _track_progress(self, line: str) -> None:
         """Update the tally from one output line. Caller holds the output lock."""
         progress = self._progress
+
+        match = CHAPTER_SIZES_RE.search(line)
+        if match:
+            sizes = {}
+            for pair in match.group(1).split(","):
+                index, _, size = pair.partition("=")
+                if index.isdigit() and size.isdigit():
+                    sizes[int(index)] = int(size)
+            progress["sizes"] = sizes
+            return
 
         match = TOTAL_TASKS_RE.search(line)
         if match:
@@ -190,18 +205,31 @@ class ConversionRunner:
         with self._output_lock:
             progress = self._progress
             total = progress["total"]
-            finished = len(progress["done"]) + len(progress["failed"])
+            done_ids = progress["done"] | progress["failed"]
+            finished = len(done_ids)
             started_at = progress["started_at"]
             stage = progress["stage"]
             failed = len(progress["failed"])
+            sizes = dict(progress["sizes"])
 
         percent = None
         eta_seconds = None
         if total:
-            percent = min(100.0, 100.0 * finished / total)
-            if finished and started_at and finished < total:
-                per_task = (time.time() - started_at) / finished
-                eta_seconds = per_task * (total - finished)
+            # Weight by characters when the sizes are known, so a book that
+            # opens with a title page and a dedication does not report 20%
+            # after twenty seconds.
+            total_size = sum(sizes.values())
+            if sizes and total_size:
+                done_size = sum(sizes.get(i, 0) for i in done_ids)
+                fraction = done_size / total_size
+            else:
+                done_size = finished
+                fraction = finished / total
+
+            percent = min(100.0, 100.0 * fraction)
+            if fraction and started_at and finished < total:
+                elapsed = time.time() - started_at
+                eta_seconds = elapsed / fraction - elapsed
 
         return {"stage": stage, "total": total, "finished": finished,
                 "failed": failed, "percent": percent, "eta_seconds": eta_seconds}

@@ -302,6 +302,7 @@ class IngestQueue:
             align_threshold=config["align_threshold"],
             max_workers=config["max_workers"],
             output_formats=config["output_formats"],
+            m4b_bitrate=config["m4b_bitrate"],
         )
 
         try:

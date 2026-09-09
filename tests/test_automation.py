@@ -270,3 +270,30 @@ def test_build_command_carries_the_chosen_formats():
 def test_defaults_are_m4b_and_the_voicebox_suffix():
     assert DEFAULTS["output_formats"] == ["m4b"]
     assert DEFAULTS["title_suffix"] == "_voicebox"
+
+
+def test_progress_is_weighted_by_chapter_size():
+    """Front matter is tiny and real chapters are long, so counting chapters
+    reports wildly optimistic progress. Weighting by characters fixes it."""
+    runner = ConversionRunner()
+    _feed(runner, [
+        "📏 Chapter characters: 0=100,1=100,2=100,3=30000,4=30000,5=30000",
+        "🚀 Start processing [book.epub] ... (Total tasks: 6)",
+    ])
+
+    # The three trivial front-matter chapters are done: half the chapters,
+    # but only a third of one percent of the actual work.
+    _feed(runner, [f"✅ [Task {i}] complete." for i in range(3)])
+    progress = runner.progress()
+    assert progress["finished"] == 3
+    assert progress["percent"] < 1.0        # not 50%
+
+    _feed(runner, ["✅ [Task 3] complete."])
+    assert runner.progress()["percent"] == pytest.approx(33.4, abs=0.5)
+
+
+def test_progress_falls_back_to_counting_when_sizes_are_absent():
+    runner = ConversionRunner()
+    _feed(runner, ["🚀 Start processing [book.epub] ... (Total tasks: 4)",
+                   "✅ [Task 0] complete."])
+    assert runner.progress()["percent"] == 25.0

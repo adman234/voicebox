@@ -50,6 +50,7 @@ class UserSettings:
 
         # Which artifacts to produce: any of "epub", "mp3", "m4b".
         self.output_formats: list[str] = ["epub"]
+        self.m4b_bitrate: str = "64k"
         pass
     
     def update(self, args: dict) -> None:

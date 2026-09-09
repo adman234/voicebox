@@ -26,7 +26,8 @@ class App(object):
     def prepare_payloads(self, chapters: list[EpubHTML]) -> list[TaskPayload]:
         pass
     
-    def export_audiobook(self, book, formats, chapter_titles, success_list, tmp_dir):
+    def export_audiobook(self, book, formats, chapter_titles, success_list, tmp_dir,
+                         title=None):
         """Repackage the generated chapter audio for an audiobook library."""
         chapters = []
         for idx in sorted(success_list):
@@ -38,23 +39,24 @@ class App(object):
             logger.warning("😔 No chapter audio to build an audiobook from.")
             return
 
+        title = title or book.title
         author = book.author
         narrator = f"{settings.tts_engine.title()} TTS - {settings.tts_voice}"
         cover_item = book.get_cover_item()
         cover = cover_item.get_raw() if cover_item is not None else None
-        destination = audiobook.book_dir(settings.output_dir, author, book.title)
+        destination = audiobook.book_dir(settings.output_dir, author, title)
 
         if audiobook.MP3 in formats:
-            files = audiobook.export_mp3_folder(chapters, destination, book.title,
+            files = audiobook.export_mp3_folder(chapters, destination, title,
                                                 author, narrator, cover)
-            audiobook.write_metadata_json(destination / "metadata.json", book.title,
+            audiobook.write_metadata_json(destination / "metadata.json", title,
                                           author, narrator, book.language, book.identifier)
             logger.info(f"🎧 Wrote {len(files)} chapter mp3 files to {destination}")
 
         if audiobook.M4B in formats:
-            target = destination / f"{audiobook.sanitize(book.title)}.m4b"
-            audiobook.export_m4b(chapters, target, book.title, author, narrator,
-                                 cover, workdir=tmp_dir)
+            target = destination / f"{audiobook.sanitize(title)}.m4b"
+            audiobook.export_m4b(chapters, target, title, author, narrator,
+                                 cover, workdir=tmp_dir, bitrate=settings.m4b_bitrate)
             size = helpers.format_bytes(target.stat().st_size)
             logger.info(f"🎧 Audiobook saved to {target} ({size})")
 
@@ -73,7 +75,9 @@ class App(object):
             )
             helpers.confirm_or_exit(msg)
 
-        # Optional: Decide output title
+        # The suffix marks the generated EPUB. Keep the book's real title for
+        # the audiobook, where "Title _voicebox" would just be wrong in a library.
+        original_title = book.title
         if settings.title_suffix:
             book.append_title_suffix(settings.title_suffix)
         epub_output_path = settings.output_path
@@ -103,12 +107,17 @@ class App(object):
                                              audio_metadata=chapter_audio_metadata,
                                              ))
         
+        sizes = ",".join(f"{p.idx}={len(p.html_text)}" for p in payload_list)
+        logger.info(f"📏 Chapter characters: {sizes}")
+
         # Ensure model files downloaded (if any) before multiprocessing dispatch
         helpers.ensure_model_downloaded(settings.tts_engine, settings.tts_lang, settings.tts_voice)
         
         # 3. Dispatch tasks and wait for completion
         logger.info(f"🚀 Start processing [{settings.input_file.name}] ... (Total tasks: {len(payload_list)})")
         start_time = time.perf_counter()
+        formats = settings.output_formats or [audiobook.EPUB]
+        tts_seconds = align_seconds = 0.0
         with ProcessPoolExecutor(max_workers=min(settings.max_workers, len(chapter_list)),
                                  initializer=init_worker,
                                  initargs=(settings.to_dict(),
@@ -129,7 +138,15 @@ class App(object):
 
                 if success:
                     logger.info(f"✅ [Task {idx}] complete. {task_result}")
-                    
+                    tts_seconds += task_result.tts_seconds
+                    align_seconds += task_result.align_seconds
+
+                    if audiobook.EPUB not in formats:
+                        # No SMIL to build: the audio file is all that is needed.
+                        success_list.append(idx)
+                        helpers.log_memory(logger, f"parent after task {idx}")
+                        continue
+
                     # s0. Get the corresponding chapter item
                     chapter: EpubHTML = chapter_list[idx]
 
@@ -168,18 +185,25 @@ class App(object):
         # 4. Report and save
         elapsed = time.perf_counter() - start_time
         logger.info(f"🎉 Processing complete. {len(success_list)} success, {len(failed_list)} failed. (finished in {helpers.format_seconds(elapsed)})")
+        worked = tts_seconds + align_seconds
+        if worked:
+            logger.info(
+                f"⏱️ Worker time: TTS {helpers.format_seconds(tts_seconds)} "
+                f"({100 * tts_seconds / worked:.0f}%), "
+                f"alignment {helpers.format_seconds(align_seconds)} "
+                f"({100 * align_seconds / worked:.0f}%)"
+            )
         if len(success_list) == 0:
             # All failed
             logger.warning("😔 Oops! All tasks failed - nothing could be created.")
         else:
-            formats = settings.output_formats or ["epub"]
-
             if audiobook.EPUB in formats:
                 book.save_epub(epub_output_path)
                 logger.info(f"💾 EPUB saved to {epub_output_path}")
 
             if audiobook.MP3 in formats or audiobook.M4B in formats:
-                self.export_audiobook(book, formats, chapter_titles, success_list, tmp_dir)
+                self.export_audiobook(book, formats, chapter_titles, success_list,
+                                      tmp_dir, original_title)
 
         # 5. Cleanup
         if settings.cleanup:

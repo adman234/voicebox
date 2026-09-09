@@ -53,6 +53,9 @@ class TaskResult(object):
     taged_html: str
     audio_file: Path
     alignments: list[TagAlignment]
+    # How the chapter's time was spent, so a run can report where it went.
+    tts_seconds: float = 0.0
+    align_seconds: float = 0.0
 
     def __str__(self):
         return (

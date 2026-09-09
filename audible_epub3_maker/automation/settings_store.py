@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 TTS_ENGINES = ["azure", "kokoro"]
 NEWLINE_MODES = ["none", "single", "multi"]
+M4B_BITRATES = ["32k", "48k", "64k", "96k", "128k"]
 
 DEFAULTS: dict[str, Any] = {
     # Automation behaviour
@@ -28,6 +29,7 @@ DEFAULTS: dict[str, Any] = {
     # Defaults mirroring the Convert tab
     "output_dir": str(OUTPUT_DIR),
     "output_formats": ["m4b"],
+    "m4b_bitrate": "64k",
     "output_filename": "",
     "title_suffix": "_voicebox",
     "log_level": "INFO",
@@ -82,6 +84,7 @@ _CASTS = {
     "stable_checks": lambda v: _as_int(v, 1, 20),
     "output_dir": lambda v: str(v or "").strip() or DEFAULTS["output_dir"],
     "output_formats": _as_formats,
+    "m4b_bitrate": lambda v: _as_choice(v, M4B_BITRATES, "64k"),
     "output_filename": lambda v: str(v or "").strip(),
     "title_suffix": lambda v: str(v or "").strip(),
     "log_level": lambda v: _as_choice(v, LOG_LEVELS, "INFO"),

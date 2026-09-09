@@ -1,4 +1,4 @@
-import logging, os
+import logging, os, time
 import psutil
 from bs4 import BeautifulSoup
 
@@ -6,6 +6,7 @@ from audible_epub3_maker.config import settings, in_dev
 from audible_epub3_maker.utils import helpers
 from audible_epub3_maker.utils import logging_setup
 from audible_epub3_maker.utils.types import TaskPayload, TaskResult, TaskErrorResult, NoWordBoundariesError
+from audible_epub3_maker import audiobook
 from audible_epub3_maker.utils.constants import BEAUTIFULSOUP_PARSER, SEG_MARK_ATTR, SEG_TAG
 from audible_epub3_maker.tts import create_tts_engine
 from audible_epub3_maker.segmenter.html_segmenter import html_segment_and_wrap
@@ -58,14 +59,26 @@ def task_fn(payload: TaskPayload):
         audio_output_file.with_suffix(".original_html.txt").write_text(original_html)
 
     # 1. TTS synthesis
+    started = time.perf_counter()
     tts = create_tts_engine(settings.tts_engine)
     wb_list = tts.html_to_speech(original_html, audio_output_file)
+    tts_seconds = time.perf_counter() - started
     logger.info(f"🔈 [Task {payload.idx}] generated audio: {audio_output_file}, Size: {helpers.format_bytes(audio_output_file.stat().st_size)}")
+
+    # Segmentation and alignment exist only to build the EPUB's SMIL sync
+    # data. When no EPUB is being produced they are pure waste, and so is the
+    # requirement that the engine report word boundaries at all.
+    if audiobook.EPUB not in (settings.output_formats or [audiobook.EPUB]):
+        logger.debug(f"[Task {payload.idx}] no EPUB requested, skipping force alignment")
+        logger.info(f"⏱️ [Task {payload.idx}] tts={tts_seconds:.1f}s align=0.0s (skipped)")
+        return TaskResult(taged_html=original_html, audio_file=audio_output_file,
+                          alignments=[], tts_seconds=tts_seconds, align_seconds=0.0)
 
     if not wb_list:
         raise NoWordBoundariesError("The TTS engine did not return any word boundaries. It may not support this feature.")
 
     # 2. Parse HTML and segment by new tag.
+    started = time.perf_counter()
     segmented_html = html_segment_and_wrap(original_html)
     if in_dev():
         audio_output_file.with_suffix(".seg_html.txt").write_text(segmented_html)
@@ -78,10 +91,15 @@ def task_fn(payload: TaskPayload):
                                          wb_list, 
                                          settings.align_threshold,
                                          audio_output_file.with_suffix(".aligns.txt"))
+    align_seconds = time.perf_counter() - started
+    logger.info(f"⏱️ [Task {payload.idx}] tts={tts_seconds:.1f}s align={align_seconds:.1f}s")
+
     return TaskResult(
         taged_html=segmented_html,
         audio_file=audio_output_file,
-        alignments=alignments
+        alignments=alignments,
+        tts_seconds=tts_seconds,
+        align_seconds=align_seconds,
     )
 
 
