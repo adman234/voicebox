@@ -22,7 +22,9 @@ from audible_epub3_maker.utils.constants import (
 )
 from audible_epub3_maker.utils import helpers
 from audible_epub3_maker.automation import runner as runner_mod
-from audible_epub3_maker.automation.runner import runner
+from audible_epub3_maker.automation.runner import (
+    runner, STAGE_ASSEMBLING, STAGE_SAVED,
+)
 from audible_epub3_maker.automation.ingest import ingest_queue
 from audible_epub3_maker.automation.settings_store import (
     settings_store, DEFAULTS, LOG_LEVELS, NEWLINE_MODES,
@@ -226,10 +228,12 @@ def run_generation(input_file, output_dir, output_filename, title_suffix, log_le
 def check_process():
     busy, source, label = runner.status()
 
-    if busy and source == runner_mod.AUTOMATION:
-        return gr.update(value=BTN_RUN_AUTOMATION, interactive=False)
     if busy:
-        return gr.update(value=BTN_RUN_RUNNING, interactive=False)
+        progress = runner.progress()
+        percent = progress.get("percent")
+        suffix = f" {percent:.0f}%" if percent is not None else ""
+        label = BTN_RUN_AUTOMATION if source == runner_mod.AUTOMATION else BTN_RUN_RUNNING
+        return gr.update(value=f"{label}{suffix}", interactive=False)
 
     return gr.update(value=BTN_RUN_IDLE, interactive=True)
 
@@ -299,8 +303,32 @@ STATUS_ICONS = {
 }
 
 
+def format_progress(progress: dict) -> str:
+    """Render the running conversion's progress as a short human phrase."""
+    stage = progress.get("stage") or ""
+    total = progress.get("total")
+    finished = progress.get("finished") or 0
+
+    if not total:
+        # No task count yet: still loading the book and the TTS model.
+        return f"{stage}…"
+
+    percent = progress.get("percent") or 0.0
+    text = f"{percent:.0f}% — chapter {min(finished + 1, total)} of {total}"
+    if progress.get("failed"):
+        text += f" ({progress['failed']} failed)"
+
+    eta = progress.get("eta_seconds")
+    if eta:
+        text += f", ~{helpers.format_seconds(eta)} left"
+    elif stage in (STAGE_ASSEMBLING, STAGE_SAVED):
+        text += f", {stage}"
+    return text
+
+
 def format_automation_status() -> str:
     snapshot = ingest_queue.snapshot()
+    progress = snapshot.get("progress") or {}
     lines = []
 
     state = "🟢 **Enabled**" if snapshot["enabled"] else "⏸️ **Paused** (turn it on in the Settings tab)"
@@ -308,9 +336,11 @@ def format_automation_status() -> str:
 
     current = snapshot["current"]
     if current:
-        lines.append(f"\n**Now converting:** 🔁 `{current['file']}` · running for {_format_duration(current['duration'])}")
+        lines.append(f"\n**Now converting:** 🔁 `{current['file']}` · {format_progress(progress)} "
+                     f"· running for {_format_duration(current['duration'])}")
     elif snapshot["runner_busy"]:
-        lines.append(f"\n**Now converting:** 🔁 {snapshot['runner_label']} (started from the Convert tab)")
+        lines.append(f"\n**Now converting:** 🔁 {snapshot['runner_label']} (started from the Convert tab) "
+                     f"· {format_progress(progress)}")
     else:
         lines.append("\n**Now converting:** nothing, idle")
 

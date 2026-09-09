@@ -6,6 +6,7 @@ import pytest
 
 from audible_epub3_maker.automation import ingest as ingest_mod
 from audible_epub3_maker.automation.ingest import IngestQueue
+from audible_epub3_maker.automation.runner import ConversionRunner
 from audible_epub3_maker.automation.settings_store import DEFAULTS, SettingsStore, coerce
 
 
@@ -178,3 +179,60 @@ def test_clear_pending_releases_claims(tmp_path):
     assert q.snapshot()["pending"] == []
     # The claim is released, so the same file can be queued again.
     assert q.enqueue_path(book).rel == "book.epub"
+
+
+## ----------------------------------------------------------------- progress
+
+def _feed(runner, lines):
+    """Push output lines through the runner's parser as the reader thread would."""
+    with runner._output_lock:
+        for line in lines:
+            runner._track_progress(line)
+
+
+def test_progress_tracks_chapters_from_real_log_lines():
+    runner = ConversionRunner()
+
+    # Before the task count is known, only the stage is reported.
+    assert runner.progress()["total"] is None
+    assert runner.progress()["percent"] is None
+
+    _feed(runner, ["2026-09-09 07:50:44 [ INFO] - 🚀 Start processing [book.epub] ... (Total tasks: 8)"])
+    progress = runner.progress()
+    assert progress["total"] == 8
+    assert progress["percent"] == 0.0
+    assert progress["stage"] == "converting chapters"
+
+    _feed(runner, [
+        "✅ [Task 0] complete. TaskResult(...)",
+        "✅ [Task 3] complete. TaskResult(...)",
+        "❌ [Task 1] failed. TaskErrorResult(...)",
+    ])
+    progress = runner.progress()
+    assert progress["finished"] == 3
+    assert progress["failed"] == 1
+    assert progress["percent"] == 37.5
+
+    # A worker-level failure line must not be double counted with the app's.
+    _feed(runner, ["⚠️ [Task 1] failed during execution"])
+    assert runner.progress()["finished"] == 3
+
+    # Repeated lines cannot inflate the count either.
+    _feed(runner, ["✅ [Task 0] complete. TaskResult(...)"])
+    assert runner.progress()["finished"] == 3
+
+    _feed(runner, ["🎉 Processing complete. 7 success, 1 failed. (finished in 40m 12s)"])
+    assert runner.progress()["stage"] == "assembling EPUB"
+    _feed(runner, ["💾 EPUB saved to /output/book.epub"])
+    assert runner.progress()["stage"] == "saved"
+
+
+def test_progress_resets_between_conversions():
+    runner = ConversionRunner()
+    _feed(runner, ["🚀 Start processing [a.epub] ... (Total tasks: 4)", "✅ [Task 0] complete."])
+    assert runner.progress()["finished"] == 1
+
+    proc = runner.start([sys.executable, "-c", "pass"], "manual", "b.epub")
+    proc.wait()
+    progress = runner.progress()
+    assert progress["total"] is None and progress["finished"] == 0

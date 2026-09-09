@@ -409,6 +409,7 @@ class IngestQueue:
                      for j in self._history if j.output and j.status in (FAILED, CANCELLED)),
                     [],
                 ),
+                "progress": runner.progress(),
                 "runner_busy": busy,
                 "runner_source": source,
                 "runner_label": label,

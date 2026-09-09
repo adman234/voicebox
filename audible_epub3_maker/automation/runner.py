@@ -6,9 +6,11 @@ are CPU heavy and all of them write to the same log file that the GUI tails.
 """
 import collections
 import logging
+import re
 import subprocess
 import sys
 import threading
+import time
 
 from audible_epub3_maker.utils.constants import BASE_DIR
 
@@ -20,6 +22,20 @@ AUTOMATION = "automation"
 # How many lines of a conversion's output to keep. A traceback plus the lines
 # leading up to it fit comfortably.
 OUTPUT_TAIL_LINES = 200
+
+# main.py reports its progress on stdout; these pick it back out. One chapter
+# is one task, so counting tasks is how far through the book we are.
+TOTAL_TASKS_RE = re.compile(r"Total tasks:\s*(\d+)")
+TASK_DONE_RE = re.compile(r"\[Task (\d+)\]\s+complete")
+TASK_FAILED_RE = re.compile(r"\[Task (\d+)\]\s+failed\.")
+TASKS_FINISHED_RE = re.compile(r"Processing complete\.")
+EPUB_SAVED_RE = re.compile(r"EPUB saved to")
+
+# Stages a conversion moves through, in order.
+STAGE_PREPARING = "preparing"
+STAGE_CONVERTING = "converting chapters"
+STAGE_ASSEMBLING = "assembling EPUB"
+STAGE_SAVED = "saved"
 
 
 def build_command(input_file, output_dir, output_filename, title_suffix, log_level, cleanup,
@@ -62,6 +78,9 @@ class ConversionRunner:
         # why a conversion failed.
         self._output_lock = threading.Lock()
         self._output: collections.deque[str] = collections.deque(maxlen=OUTPUT_TAIL_LINES)
+        # Progress is tallied as each line arrives rather than by scanning the
+        # buffer, which only holds the tail and would undercount a long book.
+        self._progress: dict = self._empty_progress()
 
     def _reap(self) -> None:
         """Forget a finished process. Caller must hold the lock."""
@@ -93,6 +112,7 @@ class ConversionRunner:
             logger.debug(f"Command: {argv}")
             with self._output_lock:
                 self._output.clear()
+                self._progress = self._empty_progress()
             proc = subprocess.Popen(
                 argv,
                 cwd=str(BASE_DIR),
@@ -119,6 +139,7 @@ class ConversionRunner:
                 line = line.rstrip("\n")
                 with self._output_lock:
                     self._output.append(line)
+                    self._track_progress(line)
                 print(line, file=sys.stderr, flush=True)
         except Exception as e:  # a closed pipe must not take the thread down
             logger.debug(f"Output reader stopped: {e}")
@@ -127,6 +148,58 @@ class ConversionRunner:
                 proc.stdout.close()
             except Exception:
                 pass
+
+    @staticmethod
+    def _empty_progress() -> dict:
+        return {"total": None, "done": set(), "failed": set(),
+                "started_at": None, "stage": STAGE_PREPARING}
+
+    def _track_progress(self, line: str) -> None:
+        """Update the tally from one output line. Caller holds the output lock."""
+        progress = self._progress
+
+        match = TOTAL_TASKS_RE.search(line)
+        if match:
+            progress["total"] = int(match.group(1))
+            progress["started_at"] = time.time()
+            progress["stage"] = STAGE_CONVERTING
+            return
+
+        match = TASK_DONE_RE.search(line)
+        if match:
+            progress["done"].add(int(match.group(1)))
+            return
+
+        match = TASK_FAILED_RE.search(line)
+        if match:
+            progress["failed"].add(int(match.group(1)))
+            return
+
+        if TASKS_FINISHED_RE.search(line):
+            progress["stage"] = STAGE_ASSEMBLING
+        elif EPUB_SAVED_RE.search(line):
+            progress["stage"] = STAGE_SAVED
+
+    def progress(self) -> dict:
+        """How far the running conversion has got, as far as its output shows."""
+        with self._output_lock:
+            progress = self._progress
+            total = progress["total"]
+            finished = len(progress["done"]) + len(progress["failed"])
+            started_at = progress["started_at"]
+            stage = progress["stage"]
+            failed = len(progress["failed"])
+
+        percent = None
+        eta_seconds = None
+        if total:
+            percent = min(100.0, 100.0 * finished / total)
+            if finished and started_at and finished < total:
+                per_task = (time.time() - started_at) / finished
+                eta_seconds = per_task * (total - finished)
+
+        return {"stage": stage, "total": total, "finished": finished,
+                "failed": failed, "percent": percent, "eta_seconds": eta_seconds}
 
     def output_tail(self, lines: int = OUTPUT_TAIL_LINES) -> list[str]:
         """The last lines the most recent conversion printed."""
