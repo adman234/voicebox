@@ -19,7 +19,7 @@
   <Category>MediaApp:Books Productivity:</Category>
   <WebUI>http://[IP]:[PORT:7860]/</WebUI>
   <TemplateURL/>
-  <Icon/>
+  <Icon>https://raw.githubusercontent.com/adman234/voicebox/main/unraid/icon.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
