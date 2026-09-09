@@ -606,6 +606,37 @@ class EpubBook:
             logger.debug(f"save lazyload content from new file: {file_path} -> {self.to_zip_relpath(item.href)}")
         pass
 
+    @property
+    def author(self) -> str:
+        """dc:creator, or an empty string when the EPUB does not name one."""
+        metadata = self.metadata
+        if metadata is None:
+            return ""
+        creator = metadata.find("dc:creator", namespaces=NAMESPACES)
+        if creator is None or not creator.text:
+            return ""
+        return creator.text.strip()
+
+    def get_cover_item(self) -> EpubItem | None:
+        """The cover image, found the two ways EPUBs record it.
+
+        EPUB 3 marks the manifest item with properties="cover-image"; EPUB 2
+        instead points at it from <meta name="cover" content="<id>">.
+        """
+        for item in self.items:
+            if "cover-image" in item.attrs.get("properties", "").split():
+                return item
+
+        metadata = self.metadata
+        if metadata is not None:
+            meta = metadata.find("opf:meta[@name='cover']", namespaces=NAMESPACES)
+            if meta is not None and meta.get("content"):
+                item = self.get_item_by_id(meta.get("content"))
+                if item is not None and item.media_type.startswith("image/"):
+                    return item
+
+        return None
+
     def get_item_by_id(self, id: str) -> EpubItem | None:
         return next((item for item in self.items if item.id == id), None)
 
