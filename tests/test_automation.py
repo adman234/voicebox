@@ -104,6 +104,40 @@ def test_queue_converts_and_files_sources_by_result(queue):
     assert not snapshot["blocked"]
 
 
+def test_failure_output_is_captured_for_the_ui(tmp_path, monkeypatch):
+    """A crashing conversion's traceback must reach the job, not vanish into stderr."""
+    def exploding_command(input_file, **kwargs):
+        code = ("import sys; print('progress line', flush=True); "
+                "raise RuntimeError('disk quota exceeded')")
+        return [sys.executable, "-c", code]
+
+    monkeypatch.setattr(ingest_mod.runner_mod, "build_command", exploding_command)
+    monkeypatch.setattr(ingest_mod, "MIN_FILE_AGE_SECONDS", 0.0)
+
+    ingest_dir = tmp_path / "ingest"
+    ingest_dir.mkdir()
+    store = SettingsStore(tmp_path / "settings.json")
+    store.save({"scan_interval": 5, "stable_checks": 1, "output_dir": str(tmp_path / "out")})
+
+    q = IngestQueue(ingest_dir, ingest_dir / "processed", ingest_dir / "failed", store)
+    q.start()
+    try:
+        (ingest_dir / "book.epub").write_bytes(b"x" * 64)
+        snapshot = _wait_for_jobs(q, 1)
+    finally:
+        q.stop()
+
+    job = snapshot["history"][0]
+    assert job["status"] == "failed"
+    # The exception reaches the one-line summary shown in the jobs table...
+    assert "disk quota exceeded" in job["message"]
+    # ...and the full output, including the traceback, is available to the UI.
+    full = "\n".join(snapshot["last_output"])
+    assert "progress line" in full
+    assert "Traceback" in full
+    assert "RuntimeError: disk quota exceeded" in full
+
+
 def test_processed_files_are_not_converted_again(queue):
     (queue.ingest_dir / "book.epub").write_bytes(b"x" * 64)
     _wait_for_jobs(queue, 1)

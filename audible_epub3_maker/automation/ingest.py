@@ -37,6 +37,19 @@ CANCELLED = "cancelled"
 MIN_FILE_AGE_SECONDS = 2.0
 
 
+def _last_error_line(output: list[str]) -> str:
+    """Pull the most useful single line out of a failed run's output."""
+    if not output:
+        return "No output was captured."
+    for line in reversed(output):
+        stripped = line.strip()
+        # The final line of a traceback is the exception itself, which is the
+        # one line worth showing in a table cell.
+        if stripped and not stripped.startswith(("Traceback", "File \"", "  ")):
+            return stripped[:300]
+    return output[-1].strip()[:300]
+
+
 @dataclass
 class Job:
     id: int
@@ -47,6 +60,7 @@ class Job:
     started_at: float | None = None
     finished_at: float | None = None
     message: str = ""
+    output: list[str] = field(default_factory=list)
 
     def duration(self) -> float | None:
         if self.started_at is None:
@@ -303,13 +317,15 @@ class IngestQueue:
             return
 
         returncode = proc.wait()
+        job.output = runner.output_tail()
 
         if returncode == 0:
             self._finish(job, DONE, f"Saved to {output_dir}.")
         elif returncode < 0:
             self._finish(job, CANCELLED, f"Cancelled (signal {-returncode}).")
         else:
-            self._finish(job, FAILED, f"main.py exited with code {returncode}. See the log for details.")
+            self._finish(job, FAILED,
+                         f"main.py exited with code {returncode}. {_last_error_line(job.output)}")
 
     def _finish(self, job: Job, status: str, message: str, move: bool = True) -> None:
         if move:
@@ -388,6 +404,11 @@ class IngestQueue:
                 "blocked": dict(self._blocked),
                 "last_scan": self._last_scan,
                 "last_error": self._last_error,
+                "last_output": next(
+                    (["# job %d: %s" % (j.id, j.rel)] + j.output
+                     for j in self._history if j.output and j.status in (FAILED, CANCELLED)),
+                    [],
+                ),
                 "runner_busy": busy,
                 "runner_source": source,
                 "runner_label": label,
