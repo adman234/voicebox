@@ -348,6 +348,13 @@ def format_automation_status() -> str:
     return "\n".join(lines)
 
 
+def format_failure_output() -> str:
+    output = ingest_queue.snapshot()["last_output"]
+    if not output:
+        return "No failed jobs. Output from a failed conversion appears here."
+    return "\n".join(output)
+
+
 def on_scan_now():
     ingest_queue.request_scan()
     gr.Info("Scanning the ingest folder now.")
@@ -607,12 +614,21 @@ def build_automation_tab():
 
     status = gr.Markdown(value=format_automation_status(), elem_id="automation-status")
 
+    failure_output = gr.Textbox(
+        label="Last Failed Job — Output",
+        info="Everything the conversion printed, including the traceback. This is the real reason it failed.",
+        value=format_failure_output(),
+        lines=16,
+        interactive=False,
+        elem_id="log-output",
+    )
+
     scan_btn.click(fn=on_scan_now, inputs=None, outputs=status)
     cancel_job_btn.click(fn=on_cancel_job, inputs=None, outputs=status)
     clear_queue_btn.click(fn=on_clear_queue, inputs=None, outputs=status)
     clear_history_btn.click(fn=on_clear_history, inputs=None, outputs=status)
 
-    return status
+    return status, failure_output
 
 
 def build_settings_tab():
@@ -760,7 +776,7 @@ def launch_gui(host: str = "127.0.0.1", port: int = 7860):
             with gr.Tab("🎬 Convert"):
                 convert = build_convert_tab()
             with gr.Tab("🤖 Automation"):
-                automation_status = build_automation_tab()
+                automation_status, automation_failure = build_automation_tab()
             with gr.Tab("⚙️ Settings"):
                 settings_components = build_settings_tab()
 
@@ -797,9 +813,9 @@ def launch_gui(host: str = "127.0.0.1", port: int = 7860):
             outputs=[convert["log_output"]]
         )
         gr.Timer(2.0).tick(
-            fn=format_automation_status,
+            fn=lambda: (format_automation_status(), format_failure_output()),
             inputs=None,
-            outputs=[automation_status]
+            outputs=[automation_status, automation_failure]
         )
 
         # Seed both tabs from the saved defaults once the page is open.

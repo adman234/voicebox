@@ -26,8 +26,10 @@ WORKDIR /app
 # - ffmpeg, for audio processing
 # - tini, as init process (PID 1)
 # - gosu, to drop from root to PUID/PGID at startup
+# - espeak-ng, so Kokoro can pronounce words outside its dictionary instead of
+#   skipping them
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg tini gosu && \
+    apt-get install -y --no-install-recommends ffmpeg tini gosu espeak-ng && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
