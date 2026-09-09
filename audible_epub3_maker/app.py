@@ -7,6 +7,7 @@ from audible_epub3_maker.config import settings
 from audible_epub3_maker.utils import helpers
 from audible_epub3_maker.utils import logging_setup
 from audible_epub3_maker.utils.constants import APP_FULLNAME, AUDIO_MIMETYPES
+from audible_epub3_maker import audiobook
 from audible_epub3_maker.utils.types import TaskPayload
 from audible_epub3_maker.epub.epub_book import EpubBook, EpubHTML, EpubAudio, LazyLoadFromFile, EpubSMIL
 from audible_epub3_maker.worker import init_worker, task_fn_wrap
@@ -25,6 +26,38 @@ class App(object):
     def prepare_payloads(self, chapters: list[EpubHTML]) -> list[TaskPayload]:
         pass
     
+    def export_audiobook(self, book, formats, chapter_titles, success_list, tmp_dir):
+        """Repackage the generated chapter audio for an audiobook library."""
+        chapters = []
+        for idx in sorted(success_list):
+            audio_file = tmp_dir / f"aud{idx}.mp3"
+            if audio_file.is_file():
+                chapters.append((chapter_titles[idx], audio_file))
+
+        if not chapters:
+            logger.warning("😔 No chapter audio to build an audiobook from.")
+            return
+
+        author = book.author
+        narrator = f"{settings.tts_engine.title()} TTS - {settings.tts_voice}"
+        cover_item = book.get_cover_item()
+        cover = cover_item.get_raw() if cover_item is not None else None
+        destination = audiobook.book_dir(settings.output_dir, author, book.title)
+
+        if audiobook.MP3 in formats:
+            files = audiobook.export_mp3_folder(chapters, destination, book.title,
+                                                author, narrator, cover)
+            audiobook.write_metadata_json(destination / "metadata.json", book.title,
+                                          author, narrator, book.language, book.identifier)
+            logger.info(f"🎧 Wrote {len(files)} chapter mp3 files to {destination}")
+
+        if audiobook.M4B in formats:
+            target = destination / f"{audiobook.sanitize(book.title)}.m4b"
+            audiobook.export_m4b(chapters, target, book.title, author, narrator,
+                                 cover, workdir=tmp_dir)
+            size = helpers.format_bytes(target.stat().st_size)
+            logger.info(f"🎧 Audiobook saved to {target} ({size})")
+
     def run(self):
         global executor
         setup_signal_handlers()
@@ -53,8 +86,11 @@ class App(object):
         tmp_dir = settings.output_dir / (settings.input_file.stem + "_tmp")
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
+        chapter_titles: list[str] = []
         for idx, chapter in enumerate(chapter_list):
             chapter_filename = Path(chapter.href).stem  # filename, not real content Chapter
+            # Read the heading now: the text is replaced with segmented HTML later.
+            chapter_titles.append(audiobook.chapter_title(chapter.get_text(), idx))
             chapter_audio_output_file = tmp_dir / f"aud{idx}.mp3"
             chapter_audio_metadata = {
                 "title": f"{book.title} - {chapter_filename}",
@@ -134,11 +170,16 @@ class App(object):
         logger.info(f"🎉 Processing complete. {len(success_list)} success, {len(failed_list)} failed. (finished in {helpers.format_seconds(elapsed)})")
         if len(success_list) == 0:
             # All failed
-            logger.warning("😔 Oops! All tasks failed - no EPUB could be created.")
+            logger.warning("😔 Oops! All tasks failed - nothing could be created.")
         else:
-            # Save EPUB
-            book.save_epub(epub_output_path)
-            logger.info(f"💾 EPUB saved to {epub_output_path}")
+            formats = settings.output_formats or ["epub"]
+
+            if audiobook.EPUB in formats:
+                book.save_epub(epub_output_path)
+                logger.info(f"💾 EPUB saved to {epub_output_path}")
+
+            if audiobook.MP3 in formats or audiobook.M4B in formats:
+                self.export_audiobook(book, formats, chapter_titles, success_list, tmp_dir)
 
         # 5. Cleanup
         if settings.cleanup:

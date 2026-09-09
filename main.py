@@ -138,6 +138,18 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--output_formats",
+        default="epub",
+        help=(
+            "Comma separated list of what to produce (default: epub).\n"
+            "  epub - EPUB 3 with Media Overlays (read-along)\n"
+            "  mp3  - a folder of tagged per-chapter mp3s for Audiobookshelf\n"
+            "  m4b  - a single audiobook file with chapter markers\n"
+            "e.g. --output_formats epub,m4b"
+        ),
+    )
+
+    parser.add_argument(
         "--cleanup",
         action="store_true",
         default=False,
@@ -145,6 +157,22 @@ def parse_args():
     )
 
     return parser.parse_args()
+
+
+def parse_output_formats(value) -> list[str]:
+    """Turn the comma separated --output_formats flag into a validated list."""
+    from audible_epub3_maker.audiobook import FORMATS
+
+    if isinstance(value, (list, tuple)):
+        requested = list(value)
+    else:
+        requested = str(value or "").split(",")
+
+    chosen = [name for name in
+              (str(item).strip().lower() for item in requested)
+              if name in FORMATS]
+    # Producing nothing is never what was meant.
+    return chosen or ["epub"]
 
 
 def apply_tts_defaults(args: dict) -> dict:
@@ -204,6 +232,7 @@ def main():
 
     # fill in any missing language/voice parameters based on selected engine
     args = apply_tts_defaults(args)
+    args["output_formats"] = parse_output_formats(args.get("output_formats"))
 
     settings.update(args)
     

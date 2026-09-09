@@ -40,7 +40,8 @@ STAGE_SAVED = "saved"
 
 def build_command(input_file, output_dir, output_filename, title_suffix, log_level, cleanup,
                   tts_engine, tts_lang, tts_voice, tts_speed,
-                  tts_chunk_len, newline_mode, align_threshold, max_workers) -> list[str]:
+                  tts_chunk_len, newline_mode, align_threshold, max_workers,
+                  output_formats=None) -> list[str]:
     """Build the `main.py` argv for one conversion."""
     args = [
         sys.executable, str(BASE_DIR / "main.py"),
@@ -57,6 +58,7 @@ def build_command(input_file, output_dir, output_filename, title_suffix, log_lev
         "--newline_mode", str(newline_mode),
         "--align_threshold", str(align_threshold),
         "--max_workers", str(int(max_workers)),
+        "--output_formats", ",".join(output_formats or ["epub"]),
         "--force",
     ]
     if cleanup:

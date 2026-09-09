@@ -247,8 +247,22 @@ Automation can be paused at any time with the checkbox in the Settings tab.
 
 ## 💾 Output
 
-- `*.mp3`: Generated audio for each chapter
-- `*.epub`: A new EPUB file with embedded mp3 audio and synchronized smil overlays
+Pick any combination in **Output Formats** (Convert tab, or the Settings tab for automation):
+
+| Format | What you get |
+|--------|--------------|
+| **EPUB 3 read-along** | A new EPUB with embedded mp3 audio and synchronized SMIL overlays, for Thorium and similar readers. |
+| **MP3 folder** | `<output>/<Author>/<Title>/` with one tagged mp3 per chapter, `cover.jpg` and `metadata.json`. Audiobookshelf reads each file as a chapter. Stream-copied, so it is lossless and quick. |
+| **M4B audiobook** | A single `.m4b` in the same folder, with chapter markers and cover art. Re-encoded to AAC, so it costs an extra pass. |
+
+Chapter names come from each chapter's own heading, falling back to `Chapter N`.
+
+Already converted a book and want an audiobook out of it without generating the speech again?
+`scripts/epub_to_audiobook.py` reads the audio back out of a finished EPUB:
+
+```bash
+python3 scripts/epub_to_audiobook.py "book.epub" /output --format m4b
+```
 
 ---
 

@@ -29,6 +29,7 @@ from audible_epub3_maker.automation.ingest import ingest_queue
 from audible_epub3_maker.automation.settings_store import (
     settings_store, DEFAULTS, LOG_LEVELS, NEWLINE_MODES,
 )
+from audible_epub3_maker import audiobook
 
 
 # NOTE:
@@ -63,6 +64,15 @@ BTN_CANCEL = "🛑 Cancel"
 LOG_MAX_LINES = 1000  # 最多保留的日志行数
 
 ENGINE_CHOICES = ["Azure", "Kokoro"]
+
+# Label shown to the user -> value stored in settings.
+FORMAT_CHOICES = [
+    ("EPUB 3 read-along", audiobook.EPUB),
+    ("MP3 folder (Audiobookshelf)", audiobook.MP3),
+    ("M4B audiobook", audiobook.M4B),
+]
+FORMAT_INFO = ("What to produce. MP3 and M4B are written as <Author>/<Title>/ for "
+               "Audiobookshelf. M4B is re-encoded, so it takes a little longer.")
 
 log_file = LOG_FILE
 log_inode = -1
@@ -204,7 +214,7 @@ def on_lang_change(tts_engine, tts_lang):
 
 
 def run_generation(input_file, output_dir, output_filename, title_suffix, log_level, cleanup,
-                   tts_engine, tts_lang, tts_voice, tts_speed,
+                   output_formats, tts_engine, tts_lang, tts_voice, tts_speed,
                    tts_chunk_len, newline_mode, align_threshold, max_workers):
     args = runner_mod.build_command(
         input_file=input_file,
@@ -221,6 +231,7 @@ def run_generation(input_file, output_dir, output_filename, title_suffix, log_le
         newline_mode=newline_mode,
         align_threshold=align_threshold,
         max_workers=max_workers,
+        output_formats=output_formats,
     )
     runner.start(args, runner_mod.MANUAL, Path(str(input_file)).name)
 
@@ -239,12 +250,14 @@ def check_process():
 
  
 def on_run_click(input_file, output_dir, output_filename, title_suffix, log_level, cleanup,
-                 tts_engine, tts_lang, tts_voice, tts_speed,
+                 output_formats, tts_engine, tts_lang, tts_voice, tts_speed,
                  tts_chunk_len, newline_mode, align_threshold, max_workers):
     # 检查 input_file, output_dir, tts_engine 必须不为空
     if not input_file:
         raise gr.Error(f"Select a EPUB file to process")
         # return ("", gr.update(), gr.update())
+    if not output_formats:
+        raise gr.Error("Select at least one output format")
     if not tts_engine:
         raise gr.Error(f"Select a TTS engine to continue")
         # return ("", gr.update(), gr.update())
@@ -261,6 +274,7 @@ def on_run_click(input_file, output_dir, output_filename, title_suffix, log_leve
             title_suffix=title_suffix.strip(),
             log_level=log_level,
             cleanup=cleanup,
+            output_formats=output_formats,
             tts_engine=tts_engine,
             tts_lang=tts_lang,
             tts_voice=tts_voice,
@@ -411,7 +425,7 @@ def on_clear_history():
 
 SETTINGS_KEYS = [
     "automation_enabled", "scan_interval", "stable_checks",
-    "output_dir", "output_filename", "title_suffix", "log_level", "cleanup",
+    "output_dir", "output_filename", "title_suffix", "log_level", "cleanup", "output_formats",
     "tts_engine", "tts_lang", "tts_voice", "tts_speed",
     "tts_chunk_len", "newline_mode", "align_threshold", "max_workers",
 ]
@@ -475,6 +489,7 @@ def seed_convert_tab():
         config["title_suffix"],
         config["log_level"],
         config["cleanup"],
+        config["output_formats"],
         config["tts_engine"].capitalize(),
         lang_update,
         voice_update,
@@ -526,6 +541,13 @@ def build_convert_tab():
                         cleanup = gr.Checkbox(label="Check to delete temporary files after processing",
                                               info="Cleanup",
                                               )
+                with gr.Row(equal_height=True):
+                    output_formats = gr.CheckboxGroup(choices=FORMAT_CHOICES,
+                                                      value=[audiobook.EPUB],
+                                                      label="Output Formats",
+                                                      info=FORMAT_INFO,
+                                                      interactive=True,
+                                                      )
             
             # TTS settings
             with gr.Accordion("🎙 TTS Settings", open=True, elem_id="tts_sets"):
@@ -614,6 +636,7 @@ def build_convert_tab():
         "title_suffix": title_suffix,
         "log_level": log_level,
         "cleanup": cleanup,
+        "output_formats": output_formats,
         "tts_engine": tts_engine,
         "tts_lang": tts_lang,
         "tts_voice": tts_voice,
@@ -714,6 +737,12 @@ def build_settings_tab():
             cleanup = gr.Checkbox(value=DEFAULTS["cleanup"],
                                   label="Check to delete temporary files after processing",
                                   info="Cleanup")
+        with gr.Row(equal_height=True):
+            output_formats = gr.CheckboxGroup(choices=FORMAT_CHOICES,
+                                              value=DEFAULTS["output_formats"],
+                                              label="Output Formats",
+                                              info=FORMAT_INFO,
+                                              interactive=True)
 
     with gr.Accordion("🎙 TTS Settings", open=True):
         with gr.Row(equal_height=True):
@@ -770,6 +799,7 @@ def build_settings_tab():
         "title_suffix": title_suffix,
         "log_level": log_level,
         "cleanup": cleanup,
+        "output_formats": output_formats,
         "tts_engine": tts_engine,
         "tts_lang": tts_lang,
         "tts_voice": tts_voice,
@@ -813,7 +843,7 @@ def launch_gui(host: str = "127.0.0.1", port: int = 7860):
         run_inputs = [
             convert["input_file"], convert["output_dir"], convert["output_filename"],
             convert["title_suffix"], convert["log_level"], convert["cleanup"],
-            convert["tts_engine"], convert["tts_lang"], convert["tts_voice"], convert["tts_speed"],
+            convert["output_formats"], convert["tts_engine"], convert["tts_lang"], convert["tts_voice"], convert["tts_speed"],
             convert["tts_chunk_len"], convert["newline_mode"], convert["align_threshold"],
             convert["max_workers"],
         ]

@@ -301,6 +301,7 @@ class IngestQueue:
             newline_mode=config["newline_mode"],
             align_threshold=config["align_threshold"],
             max_workers=config["max_workers"],
+            output_formats=config["output_formats"],
         )
 
         try:

@@ -47,6 +47,9 @@ class UserSettings:
         self.title_suffix: str = ""
 
         self.cleanup: bool = False
+
+        # Which artifacts to produce: any of "epub", "mp3", "m4b".
+        self.output_formats: list[str] = ["epub"]
         pass
     
     def update(self, args: dict) -> None:

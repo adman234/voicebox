@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from audible_epub3_maker.audiobook import FORMATS as OUTPUT_FORMATS
 from audible_epub3_maker.utils.constants import OUTPUT_DIR, SETTINGS_FILE
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ DEFAULTS: dict[str, Any] = {
 
     # Defaults mirroring the Convert tab
     "output_dir": str(OUTPUT_DIR),
+    "output_formats": ["epub"],
     "output_filename": "",
     "title_suffix": "",
     "log_level": "INFO",
@@ -57,6 +59,15 @@ def _as_float(value: Any, low: float, high: float) -> float:
     return max(low, min(high, number))
 
 
+def _as_formats(value: Any) -> list[str]:
+    """Keep only recognised output formats, never an empty selection."""
+    items = value.split(",") if isinstance(value, str) else list(value or [])
+    chosen = [str(item).strip().lower() for item in items]
+    chosen = [name for name in chosen if name in OUTPUT_FORMATS]
+    # Producing nothing is never what was meant.
+    return chosen or ["epub"]
+
+
 def _as_choice(value: Any, choices: list[str], fallback: str) -> str:
     text = str(value or "").strip()
     for choice in choices:
@@ -70,6 +81,7 @@ _CASTS = {
     "scan_interval": lambda v: _as_int(v, 5, 3600),
     "stable_checks": lambda v: _as_int(v, 1, 20),
     "output_dir": lambda v: str(v or "").strip() or DEFAULTS["output_dir"],
+    "output_formats": _as_formats,
     "output_filename": lambda v: str(v or "").strip(),
     "title_suffix": lambda v: str(v or "").strip(),
     "log_level": lambda v: _as_choice(v, LOG_LEVELS, "INFO"),
