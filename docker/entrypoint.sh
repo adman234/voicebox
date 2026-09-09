@@ -25,7 +25,7 @@ APP_USER=$(getent passwd "$PUID" | cut -d: -f1)
 # a recursive chown of a large output share costs minutes on every start, and
 # the files in it are already owned correctly.
 for dir in "$VOICEBOX_INGEST_DIR" "$VOICEBOX_INGEST_DIR/processed" "$VOICEBOX_INGEST_DIR/failed" \
-           "$VOICEBOX_OUTPUT_DIR" "$VOICEBOX_CONFIG_DIR" "$HF_HOME" /app/logs; do
+           "$VOICEBOX_OUTPUT_DIR" "$VOICEBOX_CONFIG_DIR" "$HF_HOME" "$XDG_CACHE_HOME" /app/logs; do
     [ -n "$dir" ] || continue
     mkdir -p "$dir" 2>/dev/null || true
     chown "$PUID:$PGID" "$dir" 2>/dev/null \

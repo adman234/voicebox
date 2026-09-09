@@ -141,6 +141,11 @@ switch it to private (package page → Package settings → Change visibility), 
 
 - **Using Azure TTS?** Make sure you set the `AZURE_TTS_KEY` and `AZURE_TTS_REGION` environment variables before starting the container.
 
+- **Kokoro model files** are baked in or cached under `/config`: the spaCy English model ships inside the
+  image, and the Kokoro weights download to `/config/huggingface` on first use. Keep the `/config` volume
+  so neither is fetched again. The container runs as `PUID`/`PGID` and cannot write to site-packages, so
+  nothing is installed at runtime.
+
 - **Using Kokoro TTS?** Keep an eye on your system's memory usage — the model runs locally and can consume several GB of RAM. On low-memory systems, this may cause OOM (out-of-memory) errors. The model downloads on first use into `/config`, so keep that volume to avoid re-downloading it.
 
 ---

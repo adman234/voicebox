@@ -41,11 +41,22 @@ COPY requirements.txt ./
 # which significantly increases the image size compared to arm64.
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Kokoro's English G2P (misaki) calls spacy.cli.download() the first time it
+# runs if this model is missing, which shells out to `pip install` and writes
+# into site-packages. That fails once the container drops to a non-root user,
+# so install the model at build time while we are still root.
+RUN python3 -m spacy download en_core_web_sm
+
+# The app runs as PUID/PGID, which cannot write to root's home. Point HOME and
+# the XDG cache at /config so any library falling back to ~/.cache still works.
+ENV HOME=/config \
+    XDG_CACHE_HOME=/config/cache
+
 # Copy the entire project into the container's WORKDIR
 COPY . .
 
 RUN chmod +x /app/docker/entrypoint.sh && \
-    mkdir -p /ingest/processed /ingest/failed /output /config /app/logs
+    mkdir -p /ingest/processed /ingest/failed /output /config/cache /app/logs
 
 # Declare that the container will listen on port 7860 at runtime
 EXPOSE 7860
