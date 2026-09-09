@@ -43,22 +43,25 @@ def build_command(input_file, output_dir, output_filename, title_suffix, log_lev
                   tts_chunk_len, newline_mode, align_threshold, max_workers,
                   output_formats=None) -> list[str]:
     """Build the `main.py` argv for one conversion."""
+    # Passed as --option=value throughout: argparse reads a bare value that
+    # begins with "-" as another option, which made a title suffix like
+    # "-voicebox" fail with "expected one argument".
     args = [
         sys.executable, str(BASE_DIR / "main.py"),
         str(input_file),
-        "-d", str(output_dir) if output_dir else "",
-        "-o", str(output_filename or ""),
-        "--title_suffix", str(title_suffix or ""),
-        "--log_level", str(log_level),
-        "--tts_engine", str(tts_engine).lower(),
-        "--tts_lang", str(tts_lang or ""),
-        "--tts_voice", str(tts_voice or ""),
-        "--tts_speed", str(tts_speed),
-        "--tts_chunk_len", str(int(tts_chunk_len)),
-        "--newline_mode", str(newline_mode),
-        "--align_threshold", str(align_threshold),
-        "--max_workers", str(int(max_workers)),
-        "--output_formats", ",".join(output_formats or ["epub"]),
+        f"--output_dir={output_dir if output_dir else ''}",
+        f"--output_filename={output_filename or ''}",
+        f"--title_suffix={title_suffix or ''}",
+        f"--log_level={log_level}",
+        f"--tts_engine={str(tts_engine).lower()}",
+        f"--tts_lang={tts_lang or ''}",
+        f"--tts_voice={tts_voice or ''}",
+        f"--tts_speed={tts_speed}",
+        f"--tts_chunk_len={int(tts_chunk_len)}",
+        f"--newline_mode={newline_mode}",
+        f"--align_threshold={align_threshold}",
+        f"--max_workers={int(max_workers)}",
+        "--output_formats=" + ",".join(output_formats or ["epub"]),
         "--force",
     ]
     if cleanup:

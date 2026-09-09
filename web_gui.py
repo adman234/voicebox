@@ -525,7 +525,9 @@ def build_convert_tab():
                                                     interactive=True
                                                     )
                         title_suffix = gr.Textbox(label="Output Title Suffix",
-                                                placeholder="e.g. by Voicebox",
+                                                value=DEFAULTS["title_suffix"],
+                                                placeholder="Leave blank for none",
+                                                info="Appended to the book title, so it also appears in the audiobook folder name. Leave blank to keep the original title.",
                                                 interactive=True
                                                 )
 
@@ -543,7 +545,7 @@ def build_convert_tab():
                                               )
                 with gr.Row(equal_height=True):
                     output_formats = gr.CheckboxGroup(choices=FORMAT_CHOICES,
-                                                      value=[audiobook.EPUB],
+                                                      value=DEFAULTS["output_formats"],
                                                       label="Output Formats",
                                                       info=FORMAT_INFO,
                                                       interactive=True,
@@ -727,7 +729,8 @@ def build_settings_tab():
             with gr.Column(min_width=160):
                 title_suffix = gr.Textbox(label="Output Title Suffix",
                                           value=DEFAULTS["title_suffix"],
-                                          placeholder="e.g. by Voicebox",
+                                          placeholder="Leave blank for none",
+                                          info="Appended to the book title, so it also appears in the audiobook folder name. Leave blank to keep the original title.",
                                           interactive=True)
                 log_level = gr.Dropdown(LOG_LEVELS,
                                         value=DEFAULTS["log_level"],

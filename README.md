@@ -247,7 +247,7 @@ Automation can be paused at any time with the checkbox in the Settings tab.
 
 ## 💾 Output
 
-Pick any combination in **Output Formats** (Convert tab, or the Settings tab for automation):
+Pick any combination in **Output Formats** (Convert tab, or the Settings tab for automation). The default is **M4B**:
 
 | Format | What you get |
 |--------|--------------|

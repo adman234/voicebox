@@ -236,3 +236,37 @@ def test_progress_resets_between_conversions():
     proc.wait()
     progress = runner.progress()
     assert progress["total"] is None and progress["finished"] == 0
+
+
+## ------------------------------------------------------- command building
+
+@pytest.mark.parametrize("suffix", ["-voicebox", "_voicebox", "by-voicebox", "--odd", ""])
+def test_values_starting_with_a_hyphen_survive_argparse(suffix):
+    """A bare "--opt value" makes argparse read a leading "-" as another option,
+    so a suffix like "-voicebox" failed with "expected one argument"."""
+    argv = ingest_mod.runner_mod.build_command(
+        input_file="/in/book.epub", output_dir="/out", output_filename="",
+        title_suffix=suffix, log_level="INFO", cleanup=False,
+        tts_engine="kokoro", tts_lang="a", tts_voice="af_heart", tts_speed=1.0,
+        tts_chunk_len=0, newline_mode="multi", align_threshold=95.0, max_workers=1,
+        output_formats=["m4b"],
+    )
+    assert f"--title_suffix={suffix}" in argv
+    # Nothing may be passed as a separate bare value that could be misread.
+    assert not any(a == "--title_suffix" for a in argv)
+
+
+def test_build_command_carries_the_chosen_formats():
+    argv = ingest_mod.runner_mod.build_command(
+        input_file="/in/book.epub", output_dir="/out", output_filename="",
+        title_suffix="", log_level="INFO", cleanup=False,
+        tts_engine="kokoro", tts_lang="a", tts_voice="af_heart", tts_speed=1.0,
+        tts_chunk_len=0, newline_mode="multi", align_threshold=95.0, max_workers=1,
+        output_formats=["mp3", "m4b"],
+    )
+    assert "--output_formats=mp3,m4b" in argv
+
+
+def test_defaults_are_m4b_and_the_voicebox_suffix():
+    assert DEFAULTS["output_formats"] == ["m4b"]
+    assert DEFAULTS["title_suffix"] == "_voicebox"

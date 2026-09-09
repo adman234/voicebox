@@ -27,9 +27,9 @@ DEFAULTS: dict[str, Any] = {
 
     # Defaults mirroring the Convert tab
     "output_dir": str(OUTPUT_DIR),
-    "output_formats": ["epub"],
+    "output_formats": ["m4b"],
     "output_filename": "",
-    "title_suffix": "",
+    "title_suffix": "_voicebox",
     "log_level": "INFO",
     "cleanup": False,
     "tts_engine": "kokoro",
