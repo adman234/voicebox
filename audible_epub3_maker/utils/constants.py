@@ -3,7 +3,7 @@ from pathlib import Path
 ## Internal configuration (not intended for user modification) ##
 
 APP_NAME = "Voicebox"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 APP_FULLNAME = APP_NAME + " v" + APP_VERSION
 APP_IN_DEV = True
 
