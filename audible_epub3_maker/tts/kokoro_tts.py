@@ -1,4 +1,4 @@
-import logging, io
+import logging, io, threading
 import soundfile as sf
 from pathlib import Path
 from kokoro import KPipeline
@@ -13,6 +13,29 @@ from audible_epub3_maker.segmenter import html_segmenter, text_segmenter
 
 logger = logging.getLogger(__name__)
 
+KOKORO_REPO_ID = "hexgrad/Kokoro-82M"
+
+# Building a KPipeline loads the 82M-parameter model and a spaCy pipeline.
+# That used to happen once per chapter, so a book cost one model load per
+# chapter and memory churned as each one was replaced. Workers are separate
+# processes, so caching here gives one model per worker instead.
+_pipelines: dict[tuple[str, str], "KPipeline"] = {}
+_pipelines_lock = threading.Lock()
+
+
+def get_pipeline(lang_code: str, repo_id: str = KOKORO_REPO_ID) -> KPipeline:
+    """Return the KPipeline for a language, building it at most once per process."""
+    key = (lang_code, repo_id)
+    with _pipelines_lock:
+        pipeline = _pipelines.get(key)
+        if pipeline is None:
+            logger.info(f"🔧 Loading Kokoro pipeline (lang={lang_code}) ...")
+            pipeline = KPipeline(lang_code=lang_code, repo_id=repo_id)
+            _pipelines[key] = pipeline
+            logger.info(f"🔧 Kokoro pipeline ready (lang={lang_code})")
+        return pipeline
+
+
 class KokoroTTS(BaseTTS):
     
     def __init__(self):
@@ -26,7 +49,7 @@ class KokoroTTS(BaseTTS):
         """
         Preload the TTS model for given language and voice to trigger download dependency files and initialization.
         """
-        pipeline = KPipeline(lang_code=lang)
+        pipeline = get_pipeline(lang)
         generator = pipeline("test", voice=voice)
         for result in generator:
             # do nothing
@@ -68,7 +91,7 @@ class KokoroTTS(BaseTTS):
             text_file.write_text(text)
 
         # 剩下的就交给 Kokoro 好了，它自己会做 分句 与 chunking (不行，还是得自己做个 chunking)
-        pipeline = KPipeline(lang_code=settings.tts_lang, repo_id="hexgrad/Kokoro-82M")
+        pipeline = get_pipeline(settings.tts_lang)
         generator = pipeline(text, voice=settings.tts_voice, speed=settings.tts_speed)
         chunk_results = []
         for idx, result in enumerate(generator):
