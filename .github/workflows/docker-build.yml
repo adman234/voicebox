@@ -75,6 +75,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Without a cache, every run rebuilds the ~3.3GB pip layer from scratch.
+      # Its contents are identical but the tarball is not byte-for-byte, so it
+      # gets a fresh digest each build and every client re-pulls all of it.
+      # Reusing the cache keeps unchanged layers bit-identical, so an app-only
+      # change is a ~1MB pull. Stored as a separate tag in the same registry
+      # (the GitHub Actions cache would not hold a layer this size).
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -83,3 +89,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
           push: true
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
