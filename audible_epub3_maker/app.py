@@ -124,6 +124,7 @@ class App(object):
                     chapter.set_text(task_result.taged_html)  # Modify HTML text
                     
                     success_list.append(idx)
+                    helpers.log_memory(logger, f"parent after task {idx}")
                 else:
                     logger.warning(f"❌ [Task {idx}] failed. {task_result}")
                     failed_list.append(idx)

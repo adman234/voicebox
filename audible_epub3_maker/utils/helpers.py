@@ -368,6 +368,23 @@ def validate_settings():
     pass
 
 
+def process_rss() -> int:
+    """Resident memory of the current process in bytes, or 0 if unavailable."""
+    try:
+        import psutil
+        return psutil.Process().memory_info().rss
+    except Exception:
+        return 0
+
+
+def log_memory(logger_, tag: str) -> None:
+    """Record this process's memory use, so growth over a run is attributable
+    to the parent or to a specific worker rather than guessed at."""
+    rss = process_rss()
+    if rss:
+        logger_.info(f"📊 [mem] {tag}: {format_bytes(rss)}")
+
+
 def ensure_model_downloaded(tts_engine: str, lang: str, voice: str):
     from audible_epub3_maker.tts import create_tts_engine
     tts = create_tts_engine(tts_engine)

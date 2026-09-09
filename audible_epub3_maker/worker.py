@@ -97,8 +97,9 @@ def test_fn(payload: TaskPayload):
 
 def task_fn_wrap(payload: TaskPayload):
     try:
-        return (True, task_fn(payload))
-        # return (True, test_fn(payload))
+        result = (True, task_fn(payload))
+        helpers.log_memory(logger, f"worker p{os.getpid()} after task {payload.idx}")
+        return result
     
     except Exception as e:
         logger.exception(f"⚠️ [Task {payload.idx}] failed during execution")
