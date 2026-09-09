@@ -3,7 +3,7 @@ from pathlib import Path
 ## Internal configuration (not intended for user modification) ##
 
 APP_NAME = "Voicebox"
-APP_VERSION = "1.1.4"
+APP_VERSION = "1.2.0"
 APP_FULLNAME = APP_NAME + " v" + APP_VERSION
 APP_IN_DEV = True
 
@@ -31,8 +31,9 @@ INGEST_FAILED_DIR = INGEST_DIR / "failed"
 CONFIG_DIR = _env_dir("VOICEBOX_CONFIG_DIR", BASE_DIR / "config")
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 
-# logging config
-LOG_DIR = BASE_DIR / "logs"
+# logging config. In the container the entrypoint points this at the logs
+# folder it resolves; from source it stays beside the code.
+LOG_DIR = _env_dir("VOICEBOX_LOG_DIR", BASE_DIR / "logs")
 LOG_FILE = LOG_DIR / "app.log"
 LOG_FORMAT = "%(asctime)s [%(levelname)5s] [p%(process)d,t%(thread)d] %(name)s.%(funcName)s:%(lineno)d - %(message)s"
 LOG_FORMAT_SIMPLE = "[%(asctime)s] [p%(process)d] [%(levelname)s] - %(message)s"

@@ -10,10 +10,11 @@ LABEL org.opencontainers.image.licenses="MIT"
 ENV PYTHONUNBUFFERED=1
 
 # Container paths. Mount these from the host; the app creates them if missing.
+# Logs, models and cache are resolved by the entrypoint: an explicit variable
+# wins, then a mapped /logs, /models or /cache, else a folder under /config.
 ENV VOICEBOX_INGEST_DIR=/ingest \
     VOICEBOX_OUTPUT_DIR=/output \
-    VOICEBOX_CONFIG_DIR=/config \
-    HF_HOME=/config/huggingface
+    VOICEBOX_CONFIG_DIR=/config
 
 # Unraid conventions: 99 = nobody, 100 = users.
 ENV PUID=99 \
@@ -47,16 +48,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # so install the model at build time while we are still root.
 RUN python3 -m spacy download en_core_web_sm
 
-# The app runs as PUID/PGID, which cannot write to root's home. Point HOME and
-# the XDG cache at /config so any library falling back to ~/.cache still works.
-ENV HOME=/config \
-    XDG_CACHE_HOME=/config/cache
-
 # Copy the entire project into the container's WORKDIR
 COPY . .
 
+# /logs, /models and /cache exist only as mount points: the entrypoint uses
+# them when they are actually mapped, and otherwise keeps everything in /config.
 RUN chmod +x /app/docker/entrypoint.sh && \
-    mkdir -p /ingest/processed /ingest/failed /output /config/cache /app/logs
+    mkdir -p /ingest/processed /ingest/failed /output /config /logs /models /cache
 
 # Declare that the container will listen on port 7860 at runtime
 EXPOSE 7860

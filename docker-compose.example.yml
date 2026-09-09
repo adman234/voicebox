@@ -9,8 +9,12 @@ services:
       - ./ingest:/ingest
       # Finished audiobooks.
       - ./output:/output
-      # Automation defaults (settings.json) and the Kokoro model cache.
+      # Automation defaults (settings.json), logs, the Kokoro model and cache.
       - ./config:/config
+      # Optional: map these only if you want them somewhere other than /config.
+      # - ./logs:/logs
+      # - ./models:/models
+      # - ./cache:/cache
     environment:
       # File ownership for the generated files. 99:100 is Unraid's nobody:users.
       - PUID=99

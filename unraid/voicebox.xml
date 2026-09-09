@@ -37,8 +37,17 @@
           Description="Where the generated audiobooks are written."
           Type="Path" Display="always" Required="true" Mask="false">/mnt/user/books/audiobooks</Config>
   <Config Name="Config Folder" Target="/config" Default="/mnt/user/appdata/voicebox" Mode="rw"
-          Description="Stores settings.json (the automation defaults) and the downloaded Kokoro model. Keep this on appdata so settings and the model survive container updates."
+          Description="Stores settings.json (the automation defaults), and unless you map them separately below, also logs/, huggingface/ (the Kokoro model) and cache/. Keep this on appdata so everything survives container updates."
           Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/voicebox</Config>
+  <Config Name="Logs Folder" Target="/logs" Default="" Mode="rw"
+          Description="Optional. Map a folder here to keep logs outside the config folder. Leave it unmapped and logs go to config/logs."
+          Type="Path" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Models Folder" Target="/models" Default="" Mode="rw"
+          Description="Optional. Map a folder here to keep the downloaded Kokoro model outside the config folder. Leave it unmapped and the model goes to config/huggingface."
+          Type="Path" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Cache Folder" Target="/cache" Default="" Mode="rw"
+          Description="Optional. Map a folder here to keep the cache outside the config folder. Leave it unmapped and the cache goes to config/cache."
+          Type="Path" Display="advanced" Required="false" Mask="false"/>
   <Config Name="PUID" Target="PUID" Default="99" Mode=""
           Description="User ID that owns the generated files. 99 is Unraid's nobody."
           Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>

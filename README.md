@@ -73,7 +73,10 @@ The image includes all dependencies and runs the Web GUI by default (linux/amd64
 |----------------|---------------|
 | `/ingest`      | Watch folder. Drop `.epub` files here for automatic conversion. Voicebox creates `processed/` and `failed/` inside it. |
 | `/output`      | Generated audiobooks. |
-| `/config`      | `settings.json` (the automation defaults) and the downloaded Kokoro model. Keep this on persistent storage. |
+| `/config`      | `settings.json` (the automation defaults), plus `logs/`, `huggingface/` (the Kokoro model) and `cache/`. Keep this on persistent storage. |
+| `/logs`        | Optional. Map it and logs go here instead of `/config/logs`. |
+| `/models`      | Optional. Map it and the Kokoro model goes here instead of `/config/huggingface`. |
+| `/cache`       | Optional. Map it and the cache goes here instead of `/config/cache`. |
 
 #### Environment variables
 
@@ -82,6 +85,11 @@ The image includes all dependencies and runs the Web GUI by default (linux/amd64
 | `PUID` / `PGID` | `99` / `100` | Ownership of generated files. The defaults are Unraid's `nobody:users`. |
 | `UMASK` | `022` | File mode mask for generated files. |
 | `AZURE_TTS_KEY` / `AZURE_TTS_REGION` | empty | Only needed for the Azure engine. Kokoro runs offline. |
+| `VOICEBOX_LOG_DIR` | `/config/logs` | Where logs are written. Overrides a mapped `/logs`. |
+
+Logs, the model and the cache are each resolved the same way: an explicit environment variable wins, then
+the dedicated mount point if you actually mapped one, otherwise a folder inside `/config`. So a single
+`/config` mapping keeps everything together, and mapping `/logs` is enough to split the logs out.
 
 #### Using docker-compose
 
@@ -142,7 +150,7 @@ switch it to private (package page → Package settings → Change visibility), 
 - **Using Azure TTS?** Make sure you set the `AZURE_TTS_KEY` and `AZURE_TTS_REGION` environment variables before starting the container.
 
 - **Kokoro model files** are baked in or cached under `/config`: the spaCy English model ships inside the
-  image, and the Kokoro weights download to `/config/huggingface` on first use. Keep the `/config` volume
+  image, and the Kokoro weights download to `/config/huggingface` (or a mapped `/models`) on first use. Keep the `/config` volume
   so neither is fetched again. The container runs as `PUID`/`PGID` and cannot write to site-packages, so
   nothing is installed at runtime.
 
