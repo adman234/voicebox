@@ -59,9 +59,10 @@ def test_each_language_gets_its_own_pipeline(kokoro_tts):
     assert kokoro_tts.get_pipeline("b") is british
 
 
-def test_download_model_reuses_the_cached_pipeline(kokoro_tts):
-    kokoro_tts.get_pipeline("a")
+def test_download_model_does_not_pin_a_model_in_the_parent(kokoro_tts):
+    """Preloading runs in the parent, which never synthesises. It must not
+    leave a model cached there for the rest of the run."""
     kokoro_tts.KokoroTTS.download_model("a", "af_heart")
 
-    # Preloading must not build a second copy of the model.
     assert kokoro_tts.FakeKPipeline.instances == 1
+    assert kokoro_tts._pipelines == {}

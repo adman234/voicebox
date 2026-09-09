@@ -1,4 +1,4 @@
-import logging, io, threading
+import gc, logging, io, threading
 import soundfile as sf
 from pathlib import Path
 from kokoro import KPipeline
@@ -48,13 +48,19 @@ class KokoroTTS(BaseTTS):
     def download_model(cls, lang: str, voice: str):
         """
         Preload the TTS model for given language and voice to trigger download dependency files and initialization.
+
+        Built outside the pipeline cache on purpose. This runs in the parent
+        process, which hands every chapter to a worker and never synthesises
+        anything itself, so caching the model here would pin a full copy in
+        memory for the whole run and buy nothing.
         """
-        pipeline = get_pipeline(lang)
+        pipeline = KPipeline(lang_code=lang, repo_id=KOKORO_REPO_ID)
         generator = pipeline("test", voice=voice)
         for result in generator:
             # do nothing
             pass
-        pass
+        del generator, pipeline
+        gc.collect()
 
 
     def html_to_speech(self, html_text: str, output_file: Path, metadata: dict|None = None) -> list[WordBoundary]:
