@@ -1,6 +1,7 @@
 import argparse
 import logging
 import sys
+import traceback
 import multiprocessing as mp
 from pathlib import Path
 
@@ -176,6 +177,23 @@ def apply_tts_defaults(args: dict) -> dict:
     return out
 
 
+def _report_fatal(message: str, show_traceback: bool = False) -> None:
+    """Write the failure straight to stderr, in addition to logging it.
+
+    Log records travel through a QueueListener, and the last ones can be lost
+    when the process exits immediately after emitting them - which is exactly
+    what happens here. Writing to stderr as well guarantees the reason for a
+    failure survives, and is what the web UI captures and shows.
+    """
+    try:
+        print(f"🛑 {message}", file=sys.stderr, flush=True)
+        if show_traceback:
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+    except Exception:
+        pass  # reporting a failure must never mask the original one
+
+
 def main():
     # 1. Set multiprocessing mode
     mp.set_start_method("spawn")
@@ -201,6 +219,7 @@ def main():
         helpers.validate_settings()
     except Exception as e:
         logger.error(f"🛑 [Abort] Settings validation failed: {e}")
+        _report_fatal(f"[Abort] Settings validation failed: {e}")
         sys.exit(1)
 
     # 5. Running application
@@ -210,6 +229,7 @@ def main():
         app.run()
     except Exception as e:
         logger.exception(f"🛑 [Exit] Unexpected Error: {e}")
+        _report_fatal(f"[Exit] Unexpected Error: {e}", show_traceback=True)
         sys.exit(1)
 
 
