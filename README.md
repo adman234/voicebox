@@ -139,11 +139,35 @@ An Unraid template is included at [`unraid/voicebox.xml`](unraid/voicebox.xml).
    repository `ghcr.io/adman234/voicebox:latest` with the three volumes above.
 2. Point **Ingest** at a share you can drop books into (e.g. `/mnt/user/books/ingest`), **Output** at
    where the audiobooks should land, and **Config** at `/mnt/user/appdata/voicebox`.
-3. Start the container and open the WebUI on port 7860.
+3. **No NVIDIA GPU?** Clear the **Extra Parameters** field. The template ships it preset to
+   `--runtime=nvidia --gpus all`, and without the Nvidia Driver plugin Docker refuses to start the
+   container with `Unknown runtime specified nvidia`.
+4. Start the container and open the WebUI on port 7860.
 
 The published package is **public**, so Unraid pulls it without any registry credentials. If you ever
 switch it to private (package page → Package settings → Change visibility), you will need to run
 `docker login ghcr.io` on the server before the pull will work.
+
+### 🚀 Running on an NVIDIA GPU
+
+Kokoro selects CUDA on its own when torch can see a GPU, and the image already contains the CUDA build
+of torch, so nothing in the app needs changing.
+
+1. Install the **Nvidia Driver** plugin from Community Applications and reboot.
+2. Find the GPU's UUID with `nvidia-smi -L`.
+3. **Extra Parameters:** `--runtime=nvidia --gpus all` (preset in the template).
+4. Set `NVIDIA_VISIBLE_DEVICES` to that UUID, and `NVIDIA_DRIVER_CAPABILITIES` to `compute,utility`.
+5. **Lower Max Workers to 1 or 2.** Each worker is a separate process with its own CUDA context and
+   its own copy of the model in VRAM, and they all queue on the same GPU, so more workers cost memory
+   without going faster. The opposite of the advice for CPU.
+
+`--runtime=nvidia` and `--gpus all` are two routes to the same thing and are usually redundant
+together. If Docker objects to having both, keep `--runtime=nvidia` with `NVIDIA_VISIBLE_DEVICES` set
+— that is the combination the Unraid plugin expects.
+
+How much faster depends on the share of a run spent in TTS, which the `⏱️ Worker time:` line at the
+end of a conversion reports. Only that share is accelerated: phonemisation, the m4b encode and EPUB
+assembly stay on the CPU.
 
 ### 💡 Notes
 

@@ -15,12 +15,14 @@
     Use the web UI to convert a single book, or drop .epub files into the ingest folder and Voicebox converts them automatically, one at a time. Defaults for automatic conversions are set in the Settings tab and stored in the config folder.
 
     Successfully converted source files are moved to ingest/processed; failures are moved to ingest/failed.
+
+    GPU: Extra Parameters is preset to "--runtime=nvidia --gpus all" for NVIDIA acceleration, which needs the Unraid Nvidia Driver plugin. NO NVIDIA GPU? CLEAR THE EXTRA PARAMETERS FIELD, or the container will not start ("Unknown runtime specified nvidia"). With a GPU, also set NVIDIA_VISIBLE_DEVICES below and lower Max Workers to 1 or 2 in the web UI, since workers share the one GPU.
   </Overview>
   <Category>MediaApp:Books Productivity:</Category>
   <WebUI>http://[IP]:[PORT:7860]/</WebUI>
   <TemplateURL/>
   <Icon>https://raw.githubusercontent.com/adman234/voicebox/main/unraid/icon.png</Icon>
-  <ExtraParams/>
+  <ExtraParams>--runtime=nvidia --gpus all</ExtraParams>
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>
@@ -57,6 +59,12 @@
   <Config Name="UMASK" Target="UMASK" Default="022" Mode=""
           Description="File mode mask applied to generated files."
           Type="Variable" Display="advanced" Required="false" Mask="false">022</Config>
+  <Config Name="NVIDIA_VISIBLE_DEVICES" Target="NVIDIA_VISIBLE_DEVICES" Default="" Mode=""
+          Description="GPU to use, as reported by 'nvidia-smi -L' (e.g. GPU-1a2b3c4d-...). Only needed when running on an NVIDIA GPU. Leave blank for CPU."
+          Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="NVIDIA_DRIVER_CAPABILITIES" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,utility" Mode=""
+          Description="Driver features exposed to the container. compute,utility is what the TTS model needs. Only relevant when running on an NVIDIA GPU."
+          Type="Variable" Display="advanced" Required="false" Mask="false">compute,utility</Config>
   <Config Name="AZURE_TTS_KEY" Target="AZURE_TTS_KEY" Default="" Mode=""
           Description="Azure Speech key. Only needed for the Azure TTS engine - the Kokoro engine runs offline with no credentials."
           Type="Variable" Display="always" Required="false" Mask="true"/>
