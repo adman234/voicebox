@@ -227,3 +227,31 @@ def test_audiobook_uses_the_clean_title_not_the_suffixed_one(tmp_path, monkeypat
     assert dest.is_dir()
     assert not (tmp_path / "library" / "Stetson Kennedy" / "The Klan Unmasked _voicebox").exists()
     assert json.loads((dest / "metadata.json").read_text())["title"] == "The Klan Unmasked"
+
+
+## ------------------------------------------------------------------ resuming
+
+def test_chapter_audio_is_reused_only_with_the_same_voice(tmp_path, monkeypatch):
+    """A re-run may reuse finished chapters, but never ones in another voice."""
+    from audible_epub3_maker.app import App
+    from audible_epub3_maker.config import settings
+
+    source = tmp_path / "book.epub"
+    source.write_bytes(b"x" * 64)
+    work = tmp_path / ".book_tmp"
+    work.mkdir()
+    monkeypatch.setattr(settings, "input_file", source)
+    monkeypatch.setattr(settings, "tts_voice", "af_heart")
+
+    # First run: nothing recorded yet, so nothing may be reused.
+    assert App._same_voice_as_last_run(work) is False
+    (work / "aud0.mp3").write_bytes(b"audio")
+
+    # Same settings again: the chapter is kept.
+    assert App._same_voice_as_last_run(work) is True
+    assert (work / "aud0.mp3").is_file()
+
+    # A different voice: the old chapter audio is discarded.
+    monkeypatch.setattr(settings, "tts_voice", "am_adam")
+    assert App._same_voice_as_last_run(work) is False
+    assert not (work / "aud0.mp3").exists()

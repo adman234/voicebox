@@ -139,6 +139,33 @@ def test_failure_output_is_captured_for_the_ui(tmp_path, monkeypatch):
     assert "RuntimeError: disk quota exceeded" in full
 
 
+def test_partial_conversion_is_filed_as_failed(tmp_path, monkeypatch):
+    """Exit code 3 means some chapters failed: not a finished book."""
+    def partial_command(input_file, **kwargs):
+        return [sys.executable, "-c", f"import sys; sys.exit({ingest_mod.EXIT_PARTIAL})"]
+
+    monkeypatch.setattr(ingest_mod.runner_mod, "build_command", partial_command)
+    monkeypatch.setattr(ingest_mod, "MIN_FILE_AGE_SECONDS", 0.0)
+
+    ingest_dir = tmp_path / "ingest"
+    ingest_dir.mkdir()
+    store = SettingsStore(tmp_path / "settings.json")
+    store.save({"scan_interval": 5, "stable_checks": 1, "output_dir": str(tmp_path / "out")})
+
+    q = IngestQueue(ingest_dir, ingest_dir / "processed", ingest_dir / "failed", store)
+    q.start()
+    try:
+        (ingest_dir / "book.epub").write_bytes(b"x" * 64)
+        snapshot = _wait_for_jobs(q, 1)
+    finally:
+        q.stop()
+
+    job = snapshot["history"][0]
+    assert job["status"] == "failed"
+    assert "Some chapters failed" in job["message"]
+    assert (q.failed_dir / "book.epub").is_file()
+
+
 def test_processed_files_are_not_converted_again(queue):
     (queue.ingest_dir / "book.epub").write_bytes(b"x" * 64)
     _wait_for_jobs(queue, 1)

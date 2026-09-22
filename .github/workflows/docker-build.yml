@@ -51,6 +51,14 @@ jobs:
           VERSION=$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' audible_epub3_maker/utils/constants.py)
           echo "App version: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # A push that forgets to bump APP_VERSION must not silently replace
+          # the image already published under that version.
+          if docker manifest inspect "ghcr.io/${{ github.repository }}:$VERSION" >/dev/null 2>&1; then
+            echo "::warning::Image $VERSION already exists; not re-tagging it. Bump APP_VERSION to publish a new version."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -62,7 +70,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short

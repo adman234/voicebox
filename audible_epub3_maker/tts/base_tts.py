@@ -113,7 +113,11 @@ class BaseTTS(object):
             logger.warning(f"Unsupported output format '{export_format}', falling back to 'mp3'")
             export_format = "mp3"
         
-        audio.export(str(output_file), format=export_format, tags=metadata)
+        # Write beside the target and rename, so a run killed mid-export never
+        # leaves a truncated file that a resumed run would take as finished.
+        part_file = output_file.with_name(output_file.name + ".part")
+        audio.export(str(part_file), format=export_format, tags=metadata)
+        part_file.replace(output_file)
         logger.debug(f"Audio saved to {output_file}")
 
         # check audio time length

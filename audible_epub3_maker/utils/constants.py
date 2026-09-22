@@ -3,11 +3,14 @@ from pathlib import Path
 ## Internal configuration (not intended for user modification) ##
 
 APP_NAME = "Voicebox"
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.6.0"
 APP_FULLNAME = APP_NAME + " v" + APP_VERSION
-APP_IN_DEV = True
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# main.py's exit code when a run finished but some chapters failed, so the
+# ingest queue can tell a partial book from a complete one.
+EXIT_PARTIAL = 3
 
 
 def _env_dir(env_var: str, default: Path) -> Path:

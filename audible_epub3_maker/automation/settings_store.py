@@ -33,7 +33,8 @@ DEFAULTS: dict[str, Any] = {
     "output_filename": "",
     "title_suffix": "_voicebox",
     "log_level": "INFO",
-    "cleanup": False,
+    # Chapter audio is only kept after a run with failures, for resuming.
+    "cleanup": True,
     "tts_engine": "kokoro",
     "tts_lang": "a",
     "tts_voice": "af_heart",

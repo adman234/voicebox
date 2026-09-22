@@ -23,9 +23,9 @@ services:
       # Only needed if you use the Azure TTS engine; Kokoro runs offline.
       - AZURE_TTS_KEY=your_azure_speech_key
       - AZURE_TTS_REGION=your_speech_region
-    restart: unless-stopped
-    # Uncomment for NVIDIA GPU acceleration (needs nvidia-container-toolkit).
+      # Uncomment for NVIDIA GPU acceleration, together with `runtime` below.
+      # - NVIDIA_VISIBLE_DEVICES=all
+      # - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    # Needs nvidia-container-toolkit on the host.
     # runtime: nvidia
-    # environment:
-    #   - NVIDIA_VISIBLE_DEVICES=all
-    #   - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped

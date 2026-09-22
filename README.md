@@ -139,9 +139,8 @@ An Unraid template is included at [`unraid/voicebox.xml`](unraid/voicebox.xml).
    repository `ghcr.io/adman234/voicebox:latest` with the three volumes above.
 2. Point **Ingest** at a share you can drop books into (e.g. `/mnt/user/books/ingest`), **Output** at
    where the audiobooks should land, and **Config** at `/mnt/user/appdata/voicebox`.
-3. **No NVIDIA GPU?** Clear the **Extra Parameters** field. The template ships it preset to
-   `--runtime=nvidia --gpus all`, and without the Nvidia Driver plugin Docker refuses to start the
-   container with `Unknown runtime specified nvidia`.
+3. Have an NVIDIA GPU? See [Running on an NVIDIA GPU](#-running-on-an-nvidia-gpu). Otherwise leave
+   **Extra Parameters** empty, as the template ships it.
 4. Start the container and open the WebUI on port 7860.
 
 The published package is **public**, so Unraid pulls it without any registry credentials. If you ever
@@ -155,15 +154,16 @@ of torch, so nothing in the app needs changing.
 
 1. Install the **Nvidia Driver** plugin from Community Applications and reboot.
 2. Find the GPU's UUID with `nvidia-smi -L`.
-3. **Extra Parameters:** `--runtime=nvidia --gpus all` (preset in the template).
+3. **Extra Parameters** (Advanced View): `--runtime=nvidia`. Leave it empty on a server without the
+   plugin, or Docker refuses to start the container with `Unknown runtime specified nvidia`.
 4. Set `NVIDIA_VISIBLE_DEVICES` to that UUID, and `NVIDIA_DRIVER_CAPABILITIES` to `compute,utility`.
 5. **Lower Max Workers to 1 or 2.** Each worker is a separate process with its own CUDA context and
    its own copy of the model in VRAM, and they all queue on the same GPU, so more workers cost memory
    without going faster. The opposite of the advice for CPU.
 
-`--runtime=nvidia` and `--gpus all` are two routes to the same thing and are usually redundant
-together. If Docker objects to having both, keep `--runtime=nvidia` with `NVIDIA_VISIBLE_DEVICES` set
-— that is the combination the Unraid plugin expects.
+`--gpus all` is another route to the same thing; `--runtime=nvidia` with `NVIDIA_VISIBLE_DEVICES` is
+the combination the Unraid plugin expects, so there is no need for both. Each worker logs
+`device=cuda` (or `device=cpu`) when its model loads, which confirms the GPU is actually in use.
 
 How much faster depends on the share of a run spent in TTS, which the `⏱️ Worker time:` line at the
 end of a conversion reports. Only that share is accelerated: phonemisation, the m4b encode and EPUB
@@ -210,7 +210,12 @@ python main.py <input_file.epub> [options]
 | `-m`, `--max_workers` | Number of worker processes                       | 3                           |
 | `--align_threshold`   | Force alignment fuzzy match threshold (0–100)    | 95.0                        |
 | `-f`, `--force`       | Force all prompts (non-interactive mode)         | false                       |
-| `--cleanup`           | Remove temp files (.mp3) after generation        | false                       |
+| `--cleanup`           | Remove temp files (.mp3) after a fully successful run | false                  |
+
+Chapter audio is generated in a hidden `.<book>_tmp` folder inside the output directory, so
+Audiobookshelf does not scan it as a book. If some chapters fail, `main.py` exits with code 3 and keeps
+that folder; for audiobook-only runs (no EPUB), running the same book again with the same voice
+settings converts only the missing chapters. Exit code 1 means nothing was produced.
 
 #### Example
 

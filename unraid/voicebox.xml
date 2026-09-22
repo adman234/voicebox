@@ -16,13 +16,13 @@
 
     Successfully converted source files are moved to ingest/processed; failures are moved to ingest/failed.
 
-    GPU: Extra Parameters is preset to "--runtime=nvidia --gpus all" for NVIDIA acceleration, which needs the Unraid Nvidia Driver plugin. NO NVIDIA GPU? CLEAR THE EXTRA PARAMETERS FIELD, or the container will not start ("Unknown runtime specified nvidia"). With a GPU, also set NVIDIA_VISIBLE_DEVICES below and lower Max Workers to 1 or 2 in the web UI, since workers share the one GPU.
+    NVIDIA GPU (optional, needs the Unraid Nvidia Driver plugin): switch to Advanced View, set Extra Parameters to "--runtime=nvidia", set NVIDIA_VISIBLE_DEVICES below to the GPU's UUID from 'nvidia-smi -L', and lower Max Workers to 1 or 2 in the web UI, since workers share the one GPU. Without a GPU, leave all of that blank.
   </Overview>
   <Category>MediaApp:Books Productivity:</Category>
   <WebUI>http://[IP]:[PORT:7860]/</WebUI>
   <TemplateURL/>
   <Icon>https://raw.githubusercontent.com/adman234/voicebox/main/unraid/icon.png</Icon>
-  <ExtraParams>--runtime=nvidia --gpus all</ExtraParams>
+  <ExtraParams/>
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>

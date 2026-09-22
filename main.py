@@ -258,14 +258,19 @@ def main():
         sys.exit(1)
 
     # 5. Running application
-    from audible_epub3_maker.app import App
+    from audible_epub3_maker.app import App, AllTasksFailedError
     app = App()
     try:
-        app.run()
+        exit_code = app.run()
+    except AllTasksFailedError as e:
+        logger.error(f"😔 {e}")
+        _report_fatal(str(e))
+        sys.exit(1)
     except Exception as e:
         logger.exception(f"🛑 [Exit] Unexpected Error: {e}")
         _report_fatal(f"[Exit] Unexpected Error: {e}", show_traceback=True)
         sys.exit(1)
+    sys.exit(exit_code or 0)
 
 
 if __name__ == "__main__":

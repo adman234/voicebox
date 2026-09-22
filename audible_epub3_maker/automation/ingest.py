@@ -21,7 +21,7 @@ from audible_epub3_maker.automation import runner as runner_mod
 from audible_epub3_maker.automation.runner import runner
 from audible_epub3_maker.automation.settings_store import settings_store
 from audible_epub3_maker.utils.constants import (
-    INGEST_DIR, INGEST_FAILED_DIR, INGEST_PROCESSED_DIR,
+    EXIT_PARTIAL, INGEST_DIR, INGEST_FAILED_DIR, INGEST_PROCESSED_DIR,
 )
 
 logger = logging.getLogger(__name__)
@@ -217,7 +217,7 @@ class IngestQueue:
     def _enqueue(self, path: Path, resolved: Path) -> Job:
         with self._lock:
             try:
-                rel = str(path.relative_to(self.ingest_dir))
+                rel = path.relative_to(self.ingest_dir).as_posix()
             except ValueError:
                 rel = path.name
             job = Job(id=self._next_id, path=path, rel=rel)
@@ -325,6 +325,13 @@ class IngestQueue:
             self._finish(job, DONE, f"Saved to {output_dir}.")
         elif returncode < 0:
             self._finish(job, CANCELLED, f"Cancelled (signal {-returncode}).")
+        elif returncode == EXIT_PARTIAL:
+            # Some chapters failed. The converted ones are kept, so moving the
+            # book back into the ingest folder redoes only the failures.
+            self._finish(job, FAILED,
+                         f"Some chapters failed; output in {output_dir} is incomplete. "
+                         f"Move the book back into the ingest folder to retry just those chapters. "
+                         f"{_last_error_line(job.output)}")
         else:
             self._finish(job, FAILED,
                          f"main.py exited with code {returncode}. {_last_error_line(job.output)}")

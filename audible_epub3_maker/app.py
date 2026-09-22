@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor, Executor, as_completed
 from audible_epub3_maker.config import settings
 from audible_epub3_maker.utils import helpers
 from audible_epub3_maker.utils import logging_setup
-from audible_epub3_maker.utils.constants import APP_FULLNAME, AUDIO_MIMETYPES
+from audible_epub3_maker.utils.constants import APP_FULLNAME, AUDIO_MIMETYPES, EXIT_PARTIAL
 from audible_epub3_maker import audiobook
 from audible_epub3_maker.utils.types import TaskPayload
 from audible_epub3_maker.epub.epub_book import EpubBook, EpubHTML, EpubAudio, LazyLoadFromFile, EpubSMIL
@@ -14,6 +14,10 @@ from audible_epub3_maker.worker import init_worker, task_fn_wrap
 
 logger = logging.getLogger(__name__)
 executor: Executor | None = None
+
+
+class AllTasksFailedError(RuntimeError):
+    """No chapter could be converted, so nothing was produced."""
 
 
 class App(object):
@@ -60,6 +64,28 @@ class App(object):
             size = helpers.format_bytes(target.stat().st_size)
             logger.info(f"🎧 Audiobook saved to {target} ({size})")
 
+    @staticmethod
+    def _same_voice_as_last_run(tmp_dir: Path) -> bool:
+        """True when chapter audio left in `tmp_dir` was made with the current
+        voice settings. Records the current ones either way, so a re-run with
+        a different voice starts afresh instead of mixing two narrators."""
+        import json
+        stamp_file = tmp_dir / "voice.json"
+        current = {key: str(getattr(settings, key, "")) for key in
+                   ("tts_engine", "tts_lang", "tts_voice", "tts_speed",
+                    "tts_chunk_len", "newline_mode")}
+        current["input_size"] = str(settings.input_file.stat().st_size)
+        try:
+            previous = json.loads(stamp_file.read_text(encoding="utf-8"))
+        except Exception:
+            previous = None
+        same = previous == current
+        if not same:
+            for stale in tmp_dir.glob("aud*.mp3"):
+                stale.unlink(missing_ok=True)
+        stamp_file.write_text(json.dumps(current), encoding="utf-8")
+        return same
+
     def run(self):
         global executor
         setup_signal_handlers()
@@ -87,8 +113,17 @@ class App(object):
         payload_list: list[TaskPayload] = []
         success_list: list[int] = []
         failed_list: list[int] = []
-        tmp_dir = settings.output_dir / (settings.input_file.stem + "_tmp")
+        # Hidden, because the output folder is usually an Audiobookshelf
+        # library and a visible folder of loose chapter mp3s gets scanned as
+        # a book of its own.
+        tmp_dir = settings.output_dir / f".{settings.input_file.stem}_tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
+        formats = settings.output_formats or [audiobook.EPUB]
+        # Without an EPUB a finished chapter is nothing but its mp3, so a run
+        # that died part way can pick up where it stopped. (An EPUB would also
+        # need each chapter's alignment, which is not kept.)
+        same_voice = self._same_voice_as_last_run(tmp_dir)
+        can_resume = same_voice and audiobook.EPUB not in formats
 
         chapter_titles: list[str] = []
         for idx, chapter in enumerate(chapter_list):
@@ -96,6 +131,9 @@ class App(object):
             # Read the heading now: the text is replaced with segmented HTML later.
             chapter_titles.append(audiobook.chapter_title(chapter.get_text(), idx))
             chapter_audio_output_file = tmp_dir / f"aud{idx}.mp3"
+            if can_resume and chapter_audio_output_file.is_file() and chapter_audio_output_file.stat().st_size > 0:
+                success_list.append(idx)
+                continue
             chapter_audio_metadata = {
                 "title": f"{book.title} - {chapter_filename}",
                 "album": book.epub_path.stem,
@@ -107,6 +145,10 @@ class App(object):
                                              audio_metadata=chapter_audio_metadata,
                                              ))
         
+        if success_list:
+            logger.info(f"♻️ Resuming: {len(success_list)} chapter(s) already converted in {tmp_dir}, "
+                        f"{len(payload_list)} left to do")
+
         sizes = ",".join(f"{p.idx}={len(p.html_text)}" for p in payload_list)
         logger.info(f"📏 Chapter characters: {sizes}")
 
@@ -116,9 +158,8 @@ class App(object):
         # 3. Dispatch tasks and wait for completion
         logger.info(f"🚀 Start processing [{settings.input_file.name}] ... (Total tasks: {len(payload_list)})")
         start_time = time.perf_counter()
-        formats = settings.output_formats or [audiobook.EPUB]
         tts_seconds = align_seconds = 0.0
-        with ProcessPoolExecutor(max_workers=min(settings.max_workers, len(chapter_list)),
+        with ProcessPoolExecutor(max_workers=max(1, min(settings.max_workers, len(payload_list))),
                                  initializer=init_worker,
                                  initargs=(settings.to_dict(),
                                            logging_setup.get_log_queue(), 
@@ -194,23 +235,26 @@ class App(object):
                 f"({100 * align_seconds / worked:.0f}%)"
             )
         if len(success_list) == 0:
-            # All failed
-            logger.warning("😔 Oops! All tasks failed - nothing could be created.")
-        else:
-            if audiobook.EPUB in formats:
-                book.save_epub(epub_output_path)
-                logger.info(f"💾 EPUB saved to {epub_output_path}")
+            raise AllTasksFailedError("All tasks failed - nothing could be created.")
 
-            if audiobook.MP3 in formats or audiobook.M4B in formats:
-                self.export_audiobook(book, formats, chapter_titles, success_list,
-                                      tmp_dir, original_title)
+        if audiobook.EPUB in formats:
+            book.save_epub(epub_output_path)
+            logger.info(f"💾 EPUB saved to {epub_output_path}")
 
-        # 5. Cleanup
+        if audiobook.MP3 in formats or audiobook.M4B in formats:
+            self.export_audiobook(book, formats, chapter_titles, success_list,
+                                  tmp_dir, original_title)
+
+        # 5. Cleanup. Keep the chapter audio after a partial run, so that the
+        # next attempt only has to redo the chapters that failed.
+        if failed_list:
+            logger.warning(f"⚠️ {len(failed_list)} chapter(s) failed: {sorted(failed_list)}. "
+                           f"Kept {tmp_dir} so a re-run only redoes those.")
+            return EXIT_PARTIAL
         if settings.cleanup:
             import shutil
-            shutil.rmtree(tmp_dir)
-        
-        pass
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        return 0
 
 
 def terminate_worker_processes(timeout: int = 1):

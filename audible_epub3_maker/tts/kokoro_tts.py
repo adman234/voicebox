@@ -32,7 +32,10 @@ def get_pipeline(lang_code: str, repo_id: str = KOKORO_REPO_ID) -> KPipeline:
             logger.info(f"🔧 Loading Kokoro pipeline (lang={lang_code}) ...")
             pipeline = KPipeline(lang_code=lang_code, repo_id=repo_id)
             _pipelines[key] = pipeline
-            logger.info(f"🔧 Kokoro pipeline ready (lang={lang_code})")
+            # torch falls back to the CPU silently when it cannot see a GPU,
+            # so say which one each worker actually got.
+            device = getattr(getattr(pipeline, "model", None), "device", "unknown")
+            logger.info(f"🔧 Kokoro pipeline ready (lang={lang_code}, device={device})")
         return pipeline
 
 
@@ -109,11 +112,14 @@ class KokoroTTS(BaseTTS):
             logger.debug(f"  audio length: {len(result.audio)}")
             logger.debug(f"  tokens length: {len(tokens)}")
 
-            # audio_chunk_file = output_file.parent / f"{output_file.stem}.part{idx}.wav"
-            if result.audio is not None:
-                audio_data = io.BytesIO()
-                sf.write(audio_data, result.audio, 24000, format="WAV")
-                audio_data.seek(0)
+            # A chunk without audio has nothing to merge. Carrying on would
+            # reuse the previous chunk's buffer, or crash on the first one.
+            if result.audio is None:
+                logger.warning(f"chunk [{idx}] produced no audio, skipping: {result.graphemes[:50]!r}")
+                continue
+            audio_data = io.BytesIO()
+            sf.write(audio_data, result.audio, 24000, format="WAV")
+            audio_data.seek(0)
 
             wbs = []            
             for token in tokens:
