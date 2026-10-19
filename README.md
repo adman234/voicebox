@@ -117,4 +117,4 @@ Run `python main.py --help` for all options. For Azure, set `AZURE_TTS_KEY` and
 
 ## License
 
-MIT, as upstream.
+[funway/audible-epub3-maker](https://github.com/funway/audible-epub3-maker) has no license file, so it is "all rights reserved" by default and I cannot license this fork. I keep my changes (Docker/Unraid packaging, watch folder) for my own use and to offer back to the author. If you want to reuse any of it, ask the upstream author first.
