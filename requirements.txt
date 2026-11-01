@@ -1,20 +1,28 @@
-python-dotenv
-pytest
-pytest-html
-beautifulsoup4
-lxml
-requests
-pydub
+# Exact versions, matching the image published on 2026-10-19. Renovate
+# (github.com/adman234/renovate-config) proposes updates as pull requests.
+
+python-dotenv==1.2.4
+pytest==9.1.1
+pytest-html==4.2.0
+beautifulsoup4==4.15.0
+lxml==6.1.3
+requests==2.34.2
+pydub==0.25.1
 audioop-lts; python_version >= "3.13"
-rapidfuzz
-psutil
+rapidfuzz==3.14.6
+psutil==7.2.2
 
 # Azure TTS
-azure-cognitiveservices-speech
+azure-cognitiveservices-speech==1.52.0
 
 # Kokoro TTS
-kokoro>=0.9.4
-soundfile
+kokoro==0.9.4
+soundfile==0.14.0
 
 # Web GUI
-gradio>=5.0,<7.0
+gradio==6.30.0
+
+# Pulled in by kokoro. Pinned so a rebuild can't silently jump to a new PyTorch
+# (and a new multi-GB CUDA layer); Renovate groups PyTorch updates for manual review.
+torch==2.14.1
+spacy==3.8.16

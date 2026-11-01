@@ -13,6 +13,14 @@ on:
     tags:
       - 'v*.*.*'                # pushing a tag matching the pattern vX.X.X (e.g., v1.2.3)
 
+  pull_request:                 # pull requests (e.g. from Renovate) only run the tests
+
+  # Weekly rebuild so :latest picks up security fixes in the python:3.11-slim
+  # base image. Layers come from the registry cache, so if the base image
+  # hasn't changed nothing is re-downloaded by Unraid.
+  schedule:
+    - cron: '41 4 * * 2'
+
 concurrency:
   # Keyed by event as well as ref: a manual run must not cancel the push build
   # of the same commit, which is what made pushes show up as "canceled".
@@ -20,7 +28,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'   # same as the python:3.11-slim base image
+          cache: pip
+
+      - name: Syntax check
+        run: python3 -m compileall -q main.py web_gui.py audible_epub3_maker
+
+      # The tests stub out Kokoro, so skip the multi-GB PyTorch download here.
+      - name: Install dependencies (without kokoro/torch/spacy)
+        run: |
+          grep -v -E '^(kokoro|torch|spacy)==' requirements.txt > /tmp/requirements-test.txt
+          pip install -r /tmp/requirements-test.txt
+
+      - name: Run tests
+        run: python -m pytest -p no:html -o addopts="" -q
+
   build:
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read              # Repository contents
@@ -29,9 +62,6 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v4
-
-      - name: Syntax check
-        run: python3 -m compileall -q main.py web_gui.py audible_epub3_maker
 
       # The amd64 image pulls in ~4GB of NVIDIA CUDA libraries via torch, which
       # is more than a stock runner has spare. Reclaim the pre-installed

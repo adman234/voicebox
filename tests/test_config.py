@@ -1,5 +1,7 @@
+import pytest
 from audible_epub3_maker import config
 
+@pytest.mark.skipif(not config.AZURE_TTS_KEY, reason="needs a real Azure key in .env")
 def test_azure_tts_config():
     assert config.AZURE_TTS_KEY, "AZURE_TTS_KEY is not set"
     assert config.AZURE_TTS_REGION, "AZURE_TTS_REGION is not set"
